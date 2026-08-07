@@ -1,11 +1,14 @@
 package com.zhli.baymd.rag.core.memory.extract;
 
 import com.zhli.baymd.infra.embedding.EmbeddingService;
+import com.zhli.baymd.rag.core.followup.FollowUpPlanService;
+import com.zhli.baymd.rag.core.followup.FollowUpPlanService.FollowUpPlan;
 import com.zhli.baymd.rag.core.memory.evolution.FactMergingService;
 import com.zhli.baymd.rag.core.memory.evolution.ProfileGenerationService;
 import com.zhli.baymd.rag.dao.entity.UserEpisodeDO;
 import com.zhli.baymd.rag.dao.entity.UserFactDO;
 import com.zhli.baymd.rag.dao.mapper.UserEpisodeVectorMapper;
+import com.zhli.baymd.rag.service.FollowUpTaskService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,6 +19,8 @@ import java.util.stream.Collectors;
 
 /**
  * 记忆提取编排器 — 异步编排 Fact 和 Episode 的提取、向量化、入库。
+ *
+ * <p>Phase 2 起在记忆提取完成后挂载主动随访规划（异步、失败不影响主流程）。</p>
  */
 @Slf4j
 @Service
@@ -28,6 +33,8 @@ public class MemoryExtractionOrchestrator {
     private final UserEpisodeVectorMapper episodeVectorMapper;
     private final FactMergingService factMergingService;
     private final ProfileGenerationService profileService;
+    private final FollowUpPlanService followUpPlanService;
+    private final FollowUpTaskService followUpTaskService;
 
     /**
      * 异步提取记忆（不阻塞用户响应）。
@@ -57,10 +64,30 @@ public class MemoryExtractionOrchestrator {
 
                 log.info("记忆提取完成: userId={}, facts={}, episode={}",
                         userId, facts.size(), episode != null ? 1 : 0);
+
+                // 主动随访规划（Phase 2），失败不影响记忆提取结果
+                planFollowUpAsync(question, answer, userId, conversationId);
             } catch (Exception e) {
                 log.warn("记忆提取失败: userId={}", userId, e);
             }
         });
+    }
+
+    private void planFollowUpAsync(String question, String answer, String userId, String conversationId) {
+        try {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    FollowUpPlan plan = followUpPlanService.plan(question, answer);
+                    if (plan.shouldFollowUp()) {
+                        followUpTaskService.createTask(userId, conversationId, plan);
+                    }
+                } catch (Exception e) {
+                    log.warn("随访规划失败: userId={}", userId, e);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("随访规划提交失败: userId={}", userId, e);
+        }
     }
 
     private void embedFactsAsync(List<UserFactDO> facts) {

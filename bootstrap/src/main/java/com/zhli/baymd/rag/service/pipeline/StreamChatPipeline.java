@@ -18,11 +18,14 @@
 package com.zhli.baymd.rag.service.pipeline;
 
 import com.zhli.baymd.framework.convention.ChatMessage;
+import com.zhli.baymd.rag.core.guardrails.EmergencyDetector;
 import com.zhli.baymd.rag.core.intent.IntentResolver;
 import com.zhli.baymd.rag.core.memory.ConversationMemoryService;
 import com.zhli.baymd.rag.core.rewrite.QueryRewriteService;
 import com.zhli.baymd.rag.core.rewrite.RewriteResult;
+import com.zhli.baymd.rag.dao.entity.MedicalReportDO;
 import com.zhli.baymd.rag.dto.SubQuestionIntent;
+import com.zhli.baymd.rag.service.ReportParseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,7 +36,8 @@ import java.util.List;
  * 流式对话流水线
  * <p>
  * 承载从 RAGChatServiceImpl 提取的业务编排逻辑：
- * 记忆加载 -> 改写拆分 -> 意图解析 -> 执行器分发（Clarification / SystemOnly / RAG / Agent）
+ * 紧急检测 -> 报告加载 -> 记忆加载 -> 改写拆分 -> 意图解析 -> 执行器分发
+ * （EMERGENCY / Clarification / SystemOnly / Agent / RAG）
  * <p>
  * 流水线模式：公共预处理阶段 → {@link ExecutorRegistry} 选择执行器 → 委托执行。
  * 相比旧版三段 if-else，新架构支持任意新增执行模式而无需修改管道代码。
@@ -43,6 +47,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StreamChatPipeline {
 
+    private final EmergencyDetector emergencyDetector;
+    private final ReportParseService reportParseService;
     private final ConversationMemoryService memoryService;
     private final QueryRewriteService queryRewriteService;
     private final IntentResolver intentResolver;
@@ -53,6 +59,10 @@ public class StreamChatPipeline {
      */
     public void execute(StreamChatContext ctx) {
         // === 公共预处理 ===
+        // 紧急分诊检测必须在最前（基于原始问题，零成本关键词匹配），
+        // 命中则 EmergencyExecutor 会短路接管，跳过后续检索/Agent。
+        detectEmergency(ctx);
+        loadReportContext(ctx);
         loadMemory(ctx);
         rewriteQuery(ctx);
         resolveIntents(ctx);
@@ -64,6 +74,25 @@ public class StreamChatPipeline {
                 ctx.getQuestion().substring(0, Math.min(50, ctx.getQuestion().length())));
 
         executor.execute(ctx);
+    }
+
+    // ==================== 公共预处理 ====================
+
+    private void detectEmergency(StreamChatContext ctx) {
+        EmergencyDetector.EmergencyResult result = emergencyDetector.detect(ctx.getQuestion());
+        ctx.setEmergency(result);
+    }
+
+    private void loadReportContext(StreamChatContext ctx) {
+        if (ctx.getReportId() == null || ctx.getReportId().isBlank()) {
+            return;
+        }
+        try {
+            MedicalReportDO report = reportParseService.getById(ctx.getReportId());
+            ctx.setReportContext(reportParseService.buildReportContext(report));
+        } catch (Exception e) {
+            log.warn("加载报告上下文失败: reportId={}, {}", ctx.getReportId(), e.getMessage());
+        }
     }
 
     // ==================== 公共预处理（保持不变） ====================

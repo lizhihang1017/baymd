@@ -7,13 +7,16 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Agent 工具注册表 — 管理所有 Agent 可调用的工具。
  *
- * <p>工具包括：知识库检索（内置）、MCP 远程工具（动态注册）等。</p>
+ * <p>本地工具（{@link AgentTool} 接口的 Spring Bean）在启动时自动收集注册；
+ * MCP 远程工具由 {@code McpClientAutoConfiguration} 动态注册到独立的
+ * {@code McpToolRegistry}（供意图驱动的 RAG 检索路径使用），本注册表仅供
+ * ReAct 循环使用。</p>
  */
 @Slf4j
 @Component
@@ -24,6 +27,26 @@ public class AgentToolRegistry {
 
     /** 锁 */
     private final Object lock = new Object();
+
+    /**
+     * 启动时自动收集所有本地 {@link AgentTool} Bean。
+     * <p>声明为 {@code @Component} 的工具类会被 Spring 注入此列表并自动注册，
+     * 无需手动注册代码。</p>
+     */
+    public AgentToolRegistry(List<AgentTool> localTools) {
+        if (localTools != null) {
+            for (AgentTool tool : localTools) {
+                if (Objects.nonNull(tool) && Objects.nonNull(tool.getName())) {
+                    register(tool);
+                }
+            }
+        }
+        log.info("AgentToolRegistry 本地工具自动注册完成: count={}, names={}",
+                size(), localTools == null ? "[]" : localTools.stream()
+                        .filter(Objects::nonNull)
+                        .map(AgentTool::getName)
+                        .toList());
+    }
 
     /**
      * 注册工具

@@ -42,6 +42,11 @@ public class AIModelProperties {
     private ModelGroup rerank = new ModelGroup();
 
     /**
+     * 视觉（多模态）模型组配置 — 用于报告解读图片/扫描件解析
+     */
+    private ModelGroup vision = new ModelGroup();
+
+    /**
      * 模型选择策略配置
      */
     private Selection selection = new Selection();

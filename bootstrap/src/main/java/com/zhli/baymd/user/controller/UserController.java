@@ -29,6 +29,7 @@ import com.zhli.baymd.framework.context.LoginUser;
 import com.zhli.baymd.framework.context.UserContext;
 import com.zhli.baymd.framework.convention.Result;
 import com.zhli.baymd.framework.web.Results;
+import com.zhli.baymd.user.service.UserEmailService;
 import com.zhli.baymd.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -48,6 +50,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final UserEmailService userEmailService;
 
     /**
      * 获取当前登录用户信息
@@ -55,12 +58,33 @@ public class UserController {
     @GetMapping("/user/me")
     public Result<CurrentUserVO> currentUser() {
         LoginUser user = UserContext.requireUser();
-        return Results.success(new CurrentUserVO(
+        CurrentUserVO vo = new CurrentUserVO(
                 user.getUserId(),
                 user.getUsername(),
                 user.getRole(),
                 user.getAvatar()
-        ));
+        );
+        return Results.success(vo);
+    }
+
+    /**
+     * 绑定邮箱 — 发送 6 位验证码。
+     */
+    @PostMapping("/user/email/bind")
+    public Result<Void> bindEmail(@RequestParam String email) {
+        LoginUser user = UserContext.requireUser();
+        userEmailService.sendCode(user.getUserId(), email);
+        return Results.success();
+    }
+
+    /**
+     * 验证邮箱验证码并完成绑定。
+     */
+    @PostMapping("/user/email/verify")
+    public Result<Boolean> verifyEmail(@RequestParam String email, @RequestParam String code) {
+        LoginUser user = UserContext.requireUser();
+        boolean ok = userEmailService.verifyAndBind(user.getUserId(), email, code);
+        return Results.success(ok);
     }
 
     /**

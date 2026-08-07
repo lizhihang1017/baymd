@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Settings, Trash2, Shield, Activity } from 'lucide-react'
-import { getSettings, clearMemory, getTraces } from '../api/baymd'
+import { Settings, Trash2, Shield, Activity, Mail } from 'lucide-react'
+import { getSettings, clearMemory, getTraces, bindEmail, verifyEmail } from '../api/baymd'
 
 export default function SettingsView() {
   const [settings, setSettings] = useState<any>(null)
   const [traces, setTraces] = useState<any[]>([])
   const [memoryCleared, setMemoryCleared] = useState(false)
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
+  const [codeSent, setCodeSent] = useState(false)
+  const [emailMsg, setEmailMsg] = useState('')
 
   useEffect(() => {
     getSettings().then(res => setSettings(res.data)).catch(() => {})
@@ -18,6 +22,30 @@ export default function SettingsView() {
       setMemoryCleared(true)
       setTimeout(() => setMemoryCleared(false), 2000)
     } catch {}
+  }
+
+  const handleSendCode = async () => {
+    setEmailMsg('')
+    try {
+      const res = await bindEmail(email)
+      if (!res.success) throw new Error(res.message || '发送失败')
+      setCodeSent(true)
+      setEmailMsg('验证码已发送，请查收邮箱')
+    } catch (e: any) {
+      setEmailMsg(`发送失败: ${e?.message || '未知错误'}`)
+    }
+  }
+
+  const handleVerify = async () => {
+    setEmailMsg('')
+    try {
+      const res = await verifyEmail(email, code)
+      if (!res.success) throw new Error(res.message || '验证失败')
+      setEmailMsg(res.data === true ? '邮箱绑定成功' : '验证码错误')
+      if (res.data === true) { setCode(''); setCodeSent(false) }
+    } catch (e: any) {
+      setEmailMsg(`验证失败: ${e?.message || '未知错误'}`)
+    }
   }
 
   return (
@@ -63,6 +91,51 @@ export default function SettingsView() {
           </button>
           <p className="text-xs text-muted mt-2">
             清空后，系统将忘记所有关于您的事实和对话情节
+          </p>
+        </section>
+
+        {/* Email Binding */}
+        <section className="bg-panel border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Mail className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-semibold">邮箱绑定（主动随访）</h2>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="输入邮箱地址"
+              className="flex-1 px-3 py-2 rounded-lg border border-border bg-white
+                text-xs text-text-primary placeholder:text-muted focus:outline-none
+                focus:ring-2 focus:ring-accent/20 focus:border-accent"
+            />
+            <button onClick={handleSendCode}
+              className="px-3 py-2 rounded-lg bg-accent text-white text-xs hover:opacity-90
+                transition-opacity disabled:opacity-40"
+              disabled={!email.includes('@')}>
+              发送验证码
+            </button>
+          </div>
+          {codeSent && (
+            <div className="flex gap-2 mt-2">
+              <input
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                placeholder="6 位验证码"
+                className="flex-1 px-3 py-2 rounded-lg border border-border bg-white
+                  text-xs text-text-primary placeholder:text-muted focus:outline-none
+                  focus:ring-2 focus:ring-accent/20 focus:border-accent"
+              />
+              <button onClick={handleVerify}
+                className="px-3 py-2 rounded-lg border border-accent text-accent text-xs
+                  hover:bg-accent/5 transition-colors">
+                确认绑定
+              </button>
+            </div>
+          )}
+          {emailMsg && <p className="text-xs text-muted mt-2">{emailMsg}</p>}
+          <p className="text-xs text-muted mt-2">
+            绑定邮箱后可接收 BayMD 主动健康随访提醒（邮件不含病情细节）
           </p>
         </section>
 

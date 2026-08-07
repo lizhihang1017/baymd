@@ -76,11 +76,17 @@ public class RagExecutor implements ConversationExecutor {
         }
 
         // 3. 构建 Prompt 并流式生成
+        String baseQuestion = ctx.getRewriteResult() != null
+                ? ctx.getRewriteResult().rewrittenQuestion()
+                : ctx.getQuestion();
+        // 若用户上传了报告，将报告内容拼入用户问题供 LLM 参考（检索已在上游完成，不影响召回）
+        String effectiveQuestion = ctx.getReportContext() != null && !ctx.getReportContext().isBlank()
+                ? ctx.getReportContext() + "\n\n用户问题：" + baseQuestion
+                : baseQuestion;
+
         IntentGroup mergedGroup = intentResolver.mergeIntentGroup(ctx.getSubIntents());
         PromptContext promptContext = PromptContext.builder()
-                .question(ctx.getRewriteResult() != null
-                        ? ctx.getRewriteResult().rewrittenQuestion()
-                        : ctx.getQuestion())
+                .question(effectiveQuestion)
                 .mcpContext(retrievalCtx.getMcpContext())
                 .kbContext(retrievalCtx.getKbContext())
                 .mcpIntents(mergedGroup.mcpIntents())
@@ -92,9 +98,7 @@ public class RagExecutor implements ConversationExecutor {
         List<ChatMessage> messages = promptBuilder.buildStructuredMessages(
                 promptContext,
                 ctx.getHistory(),
-                ctx.getRewriteResult() != null
-                        ? ctx.getRewriteResult().rewrittenQuestion()
-                        : ctx.getQuestion(),
+                effectiveQuestion,
                 ctx.getRewriteResult() != null
                         ? ctx.getRewriteResult().subQuestions()
                         : List.of()

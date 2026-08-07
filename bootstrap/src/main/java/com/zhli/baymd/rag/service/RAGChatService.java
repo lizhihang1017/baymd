@@ -26,14 +26,23 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public interface RAGChatService {
 
     /**
-     * 发起一次 SSE 流式问答
+     * 发起一次 SSE 流式问答（不带报告）
+     */
+    default void streamChat(String question, String conversationId, Boolean deepThinking, SseEmitter emitter) {
+        streamChat(question, conversationId, deepThinking, null, emitter);
+    }
+
+    /**
+     * 发起一次 SSE 流式问答。
      *
      * @param question       用户问题
      * @param conversationId 会话 ID（可选，空时创建新会话）
      * @param deepThinking   是否开启深度思考模式
+     * @param reportId       关联的报告 ID（可选，报告解读场景注入报告上下文）
      * @param emitter        SSE 发射器
      */
-    void streamChat(String question, String conversationId, Boolean deepThinking, SseEmitter emitter);
+    void streamChat(String question, String conversationId, Boolean deepThinking,
+                    String reportId, SseEmitter emitter);
 
     /**
      * 停止指定任务 ID 的流式会话

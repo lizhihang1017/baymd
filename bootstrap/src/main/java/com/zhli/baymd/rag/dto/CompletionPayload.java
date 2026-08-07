@@ -27,10 +27,16 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record CompletionPayload(String messageId, String title,
                                  List<CitationItem> citations,
-                                 List<String> followUpQuestions) {
+                                 List<String> followUpQuestions,
+                                 Boolean emergency) {
 
     public CompletionPayload(String messageId, String title) {
-        this(messageId, title, null, null);
+        this(messageId, title, null, null, null);
+    }
+
+    public CompletionPayload(String messageId, String title,
+                             List<CitationItem> citations, List<String> followUpQuestions) {
+        this(messageId, title, citations, followUpQuestions, null);
     }
 
     public record CitationItem(int index, String id, String snippet) {}

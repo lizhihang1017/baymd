@@ -68,4 +68,14 @@ public interface StreamCallback {
      * @param error 异常对象，包含具体错误信息
      */
     void onError(Throwable error);
+
+    /**
+     * 标记本次响应为紧急（如红旗症状急救指引）。
+     * <p>实现方可据此在完成帧中携带紧急标记，供前端渲染警示样式。
+     * 默认空实现，未关心的实现可忽略。</p>
+     *
+     * @param emergency 是否紧急
+     */
+    default void setEmergency(boolean emergency) {
+    }
 }

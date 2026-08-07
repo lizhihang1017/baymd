@@ -57,11 +57,15 @@ public class AgentExecutor implements ConversationExecutor {
     @Override
     public void execute(StreamChatContext ctx) {
         String systemPrompt = promptTemplateLoader.load(CHAT_SYSTEM_PROMPT_PATH);
-        String question = ctx.getRewriteResult() != null
+        String baseQuestion = ctx.getRewriteResult() != null
                 ? ctx.getRewriteResult().rewrittenQuestion()
                 : ctx.getQuestion();
+        // 若用户上传了报告，将报告内容拼入用户问题供 Agent 参考
+        String question = ctx.getReportContext() != null && !ctx.getReportContext().isBlank()
+                ? ctx.getReportContext() + "\n\n用户问题：" + baseQuestion
+                : baseQuestion;
 
-        log.info("Agent 执行器启动: question={}", question);
+        log.info("Agent 执行器启动: question={}", baseQuestion);
 
         ReActLoop.ReActResult result = agentService.processStreaming(
                 systemPrompt,

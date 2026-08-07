@@ -54,6 +54,15 @@ public class UserDO {
      */
     private String role;
 
+    /** 邮箱地址（主动随访用） */
+    private String email;
+
+    /** 邮箱是否已验证 0:未验证 1:已验证 */
+    private Integer emailVerified;
+
+    /** 是否允许主动随访 0:退订 1:允许 */
+    private Integer followupEnabled;
+
     @TableField(fill = FieldFill.INSERT)
     private Date createTime;
 

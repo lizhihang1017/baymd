@@ -24,7 +24,7 @@ class ReActLoopTest {
     @BeforeEach
     void setUp() {
         mockLLM = new MockLLMService();
-        toolRegistry = new AgentToolRegistry();
+        toolRegistry = new AgentToolRegistry(List.of());
 
         // 注册一个 mock 知识库检索工具
         toolRegistry.register(new MockSearchTool());

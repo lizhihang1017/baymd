@@ -19,6 +19,7 @@ export interface CompletionPayload {
   title?: string;
   citations?: { index: number; id: string; snippet: string }[];
   followUpQuestions?: string[];
+  emergency?: boolean;
 }
 
 export interface SSEMessageEvent {
@@ -68,12 +69,14 @@ export function streamChat(
   onMeta: (meta: SSEMetaEvent) => void,
   onDelta: (type: 'response' | 'think', delta: string) => void,
   onDone: (payload: CompletionPayload) => void,
-  onError: (err: Error) => void
+  onError: (err: Error) => void,
+  reportId?: string | null
 ): AbortController {
   const controller = new AbortController();
   const params = new URLSearchParams({ question });
   if (conversationId) params.set('conversationId', conversationId);
   if (deepThinking) params.set('deepThinking', 'true');
+  if (reportId) params.set('reportId', reportId);
 
   fetch(`${BASE}/rag/v3/chat?${params.toString()}`, {
     signal: controller.signal,
@@ -127,6 +130,24 @@ export async function submitFeedback(messageId: string, vote: 1 | -1) {
   });
 }
 
+// ===== Report (报告解读) =====
+
+export interface MedicalReport {
+  id: string;
+  fileName: string;
+  parseStatus: string;
+  errorMessage?: string;
+}
+
+export async function uploadReport(file: File): Promise<MedicalReport> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/rag/report/upload`, { method: 'POST', body: form });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.message || '上传失败');
+  return json.data;
+}
+
 // ===== Knowledge Base =====
 
 export async function listKnowledgeBases() {
@@ -151,4 +172,28 @@ export async function getSettings() {
 export async function getTraces(page: number = 1, size: number = 10) {
   const res = await fetch(`${BASE}/rag/traces/runs?page=${page}&size=${size}`);
   return res.json();
+}
+
+// ===== FollowUp (主动随访) =====
+
+export async function bindEmail(email: string) {
+  const res = await fetch(`${BASE}/user/email/bind?email=${encodeURIComponent(email)}`, { method: 'POST' });
+  return res.json();
+}
+
+export async function verifyEmail(email: string, code: string) {
+  const res = await fetch(
+    `${BASE}/user/email/verify?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`,
+    { method: 'POST' }
+  );
+  return res.json();
+}
+
+export async function getFollowup(id: string) {
+  const res = await fetch(`${BASE}/followup/${id}`);
+  return res.json();
+}
+
+export async function markFollowupAnswered(id: string) {
+  await fetch(`${BASE}/followup/${id}/answered`, { method: 'POST' });
 }

@@ -765,3 +765,92 @@ CREATE TABLE IF NOT EXISTS t_user_episode_vector (
 );
 CREATE INDEX IF NOT EXISTS idx_ep_vec_hnsw ON t_user_episode_vector
     USING hnsw (embedding vector_cosine_ops);
+
+-- ============================================
+-- 药物相互作用表 (Phase 3.2)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS t_drug_interaction (
+    id          VARCHAR(20)    NOT NULL PRIMARY KEY,
+    drug_a      VARCHAR(128)   NOT NULL,
+    drug_b      VARCHAR(128)   NOT NULL,
+    severity    VARCHAR(16)    NOT NULL,
+    description TEXT           NOT NULL,
+    create_by   VARCHAR(20)    DEFAULT 'system',
+    update_by   VARCHAR(20),
+    create_time TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted     SMALLINT       NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_drug_int_a ON t_drug_interaction (drug_a);
+CREATE INDEX IF NOT EXISTS idx_drug_int_b ON t_drug_interaction (drug_b);
+COMMENT ON TABLE t_drug_interaction IS '药物相互作用记录表';
+COMMENT ON COLUMN t_drug_interaction.drug_a IS '药物A（归一化：trim+小写）';
+COMMENT ON COLUMN t_drug_interaction.drug_b IS '药物B（归一化：trim+小写）';
+COMMENT ON COLUMN t_drug_interaction.severity IS '严重程度：严重/中度/轻度';
+COMMENT ON COLUMN t_drug_interaction.description IS '相互作用描述与临床建议';
+
+-- ============================================
+-- 医学检查报告表 (Phase 1 报告解读)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS t_medical_report (
+    id            VARCHAR(20)    NOT NULL PRIMARY KEY,
+    user_id       VARCHAR(20)    NOT NULL,
+    file_name     VARCHAR(256)   NOT NULL,
+    storage_key   VARCHAR(512)   NOT NULL,
+    mime_type     VARCHAR(64),
+    raw_text      TEXT,
+    structured    JSONB,
+    parse_status  VARCHAR(16)    DEFAULT 'PENDING',
+    error_message TEXT,
+    create_by     VARCHAR(20),
+    update_by     VARCHAR(20),
+    create_time   TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time   TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted       SMALLINT       NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_report_user ON t_medical_report (user_id, create_time DESC);
+COMMENT ON TABLE t_medical_report IS '医学检查报告表（用户上传的化验单/检查单）';
+COMMENT ON COLUMN t_medical_report.storage_key IS 'S3/本地存储对象 key';
+COMMENT ON COLUMN t_medical_report.raw_text IS '提取的原始文本';
+COMMENT ON COLUMN t_medical_report.structured IS '结构化指标 JSON 数组';
+COMMENT ON COLUMN t_medical_report.parse_status IS '解析状态：PENDING/SUCCESS/FAILED';
+
+-- ============================================
+-- 用户邮箱扩展 (Phase 2 主动随访)
+-- ============================================
+ALTER TABLE t_user ADD COLUMN IF NOT EXISTS email VARCHAR(128);
+ALTER TABLE t_user ADD COLUMN IF NOT EXISTS email_verified SMALLINT DEFAULT 0;
+ALTER TABLE t_user ADD COLUMN IF NOT EXISTS followup_enabled SMALLINT DEFAULT 1;
+COMMENT ON COLUMN t_user.email IS '邮箱地址';
+COMMENT ON COLUMN t_user.email_verified IS '邮箱是否已验证 0:未验证 1:已验证';
+COMMENT ON COLUMN t_user.followup_enabled IS '是否允许主动随访 0:退订 1:允许';
+
+-- ============================================
+-- 随访任务表 (Phase 2 主动随访)
+-- ============================================
+CREATE TABLE IF NOT EXISTS t_followup_task (
+    id              VARCHAR(20)   NOT NULL PRIMARY KEY,
+    user_id         VARCHAR(20)   NOT NULL,
+    conversation_id VARCHAR(20),
+    topic           VARCHAR(64),
+    question        VARCHAR(512)  NOT NULL,
+    trigger_time    TIMESTAMP     NOT NULL,
+    status          VARCHAR(16)   DEFAULT 'PENDING',
+    channel         VARCHAR(16)   DEFAULT 'email',
+    unsub_token     VARCHAR(64)   NOT NULL,
+    lock_until      TIMESTAMP,
+    sent_time       TIMESTAMP,
+    answered_time   TIMESTAMP,
+    create_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted         SMALLINT      NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_followup_scan ON t_followup_task (status, trigger_time);
+CREATE INDEX IF NOT EXISTS idx_followup_user ON t_followup_task (user_id, topic, create_time DESC);
+CREATE INDEX IF NOT EXISTS idx_followup_unsub ON t_followup_task (unsub_token);
+COMMENT ON TABLE t_followup_task IS '主动随访任务表';
+COMMENT ON COLUMN t_followup_task.status IS 'PENDING/SENT/ANSWERED/CANCELLED/EXPIRED';
+COMMENT ON COLUMN t_followup_task.topic IS '随访主题（频控去重用）';
+COMMENT ON COLUMN t_followup_task.lock_until IS '调度分布式锁';

@@ -53,6 +53,8 @@ public class StreamChatEventHandler implements StreamCallback {
     private final StringBuilder thinking = new StringBuilder();
     private long thinkingStartMs;
     private int thinkingDurationSeconds;
+    /** 紧急响应标记（由 EmergencyExecutor 调 setEmergency(true) 设置） */
+    private boolean emergency;
 
     /**
      * 使用参数对象构造（推荐）
@@ -168,7 +170,8 @@ public class StreamChatEventHandler implements StreamCallback {
         }
         String title = resolveTitleForEvent();
         String messageIdText = StrUtil.isBlank(messageId) ? null : messageId;
-        sender.sendEvent(SSEEventType.FINISH.value(), new CompletionPayload(messageIdText, title));
+        sender.sendEvent(SSEEventType.FINISH.value(),
+                new CompletionPayload(messageIdText, title, null, null, emergency ? Boolean.TRUE : null));
         sender.sendEvent(SSEEventType.DONE.value(), "[DONE]");
         taskManager.unregister(taskId);
         sender.complete();
@@ -181,6 +184,11 @@ public class StreamChatEventHandler implements StreamCallback {
         }
         taskManager.unregister(taskId);
         sender.fail(t);
+    }
+
+    @Override
+    public void setEmergency(boolean emergency) {
+        this.emergency = emergency;
     }
 
     private void sendChunked(String type, String content) {

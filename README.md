@@ -55,10 +55,30 @@ Agent: 思考 → search_knowledge_base("头疼") → 观察结果
 
 ### 🛡️ 生产级护栏
 
+- **紧急分诊短路**：红旗症状（胸痛/呼吸困难/意识不清/自杀自残等 74+ 关键词 8 类）在预处理最前端零成本检测，`EmergencyExecutor` 跳过检索/Agent 直接输出急救指引 + 心理援助热线（前端红色警示卡）
 - **工具调用**：指数退避重试 + 超时 + 降级（RetrievalEngine/MCP 全覆盖）
 - **证据预算**：Token 预算控制 + 低置信度短路
 - **Checkpoint**：Redis 持久化，支持中断恢复
 - **模型路由**：三状态断路器（CLOSED → OPEN → HALF_OPEN），故障自动切换
+
+### 🧰 Agent 医学工具
+
+ReAct 框架内置可调用的领域工具（`@Component` 即自动注册）：
+
+| 工具 | 能力 |
+|------|------|
+| `medical_calculator` | BMI / eGFR(CKD-EPI 2021) / BSA(Mosteller) / 最大心率，含临床解读 |
+| `drug_interaction` | 55 组药物相互作用双向查询，未收录不编造 |
+| `create_followup_reminder` | 对话中直接创建随访提醒任务 |
+| `query_report_indicator` | 查询历史报告指标，支持时间对比（"血糖比上次高吗"） |
+
+### 🏥 报告解读入口
+
+上传化验单/检查单图片或 PDF → **Tika 文本层 / qwen-vl 多模态分流** → LLM 结构化提取指标（name/value/unit/refRange/flag）→ 注入对话上下文，支持"这份报告有什么问题""我的血糖比上次高吗"等追问。
+
+### ✉️ 主动随访（邮件推送）
+
+对话结束后 LLM 判断是否值得随访 → 生成 PENDING 任务（主题 7 天去重 / 每日限 1 / 静默时段顺延 / 3 天过期）→ 定时调度发送邮件（**正文不含病情细节**，隐私红线）→ 深链回流预填问题 → 用户回答自动写回语义记忆，形成"越用越聪明"闭环。通知通道为 SPI 可插拔（预留短信/微信）。
 
 ### 🎨 React 前端
 
@@ -66,8 +86,10 @@ Agent: 思考 → search_knowledge_base("头疼") → 观察结果
 
 - SSE 流式对话 + 思考过程展示
 - 会话列表管理（新建/切换/删除/导出）
+- **报告上传**：回形针按钮附加化验单，提问自动携带 reportId
+- **引用来源 + 推荐追问**：完成帧渲染引用折叠卡片 + 追问按钮一键发送
 - 知识库管理
-- 系统设置（含清空记忆、链路追踪）
+- 系统设置（含**邮箱绑定**、清空记忆、链路追踪）
 - 点赞/踩反馈联动
 
 ### 📄 其他
@@ -81,12 +103,13 @@ Agent: 思考 → search_knowledge_base("头疼") → 观察结果
 ## 对话管线
 
 ```
-Memory Load → Query Rewrite → Intent Classification
-→ ExecutorRegistry 分发:
+Emergency Detect (关键词短路) → Memory Load → Query Rewrite → Intent Classification
+→ ExecutorRegistry 分发 (枚举声明顺序即优先级):
+    ├── EMERGENCY         (红旗症状 → 急救指引，零检索延迟)
     ├── ClarificationExecutor   (歧义引导)
     ├── SystemOnlyExecutor      (闲聊/问候，不走检索)
     ├── AgentExecutor           (ReAct 循环，rag.react.enabled=true)
-    └── RagExecutor             (经典 RAG，默认)
+    └── RagExecutor             (经典 RAG，兜底)
 ```
 
 ## 快速开始
@@ -97,6 +120,9 @@ docker compose -f resources/docker/lightweight/milvus-stack-2.6.6.compose.yaml u
 
 # 2. 初始化数据库
 psql -h localhost -U postgres -d baymd -f resources/database/schema_pg.sql
+# 新功能表（报告/随访/药物互作用）+ 药物种子数据（幂等，可重复执行）
+psql -h localhost -U postgres -d baymd -f resources/database/init_feature_tables.sql
+psql -h localhost -U postgres -d baymd -f resources/database/init_drug_interaction.sql
 
 # 3. 配置 LLM API Key
 export BAILIAN_API_KEY=your_key_here
@@ -104,13 +130,15 @@ export BAILIAN_API_KEY=your_key_here
 # 4. 启动后端（端口 9090）
 ./mvnw spring-boot:run -pl bootstrap
 
-# 5. 启动前端（端口 5173，代理到 9090）
+# 5. 启动前端（端口 5173，代理到 9090；vite 已配置 host:true 支持外网访问）
 cd frontend && npm install && npm run dev
 
 # 6. 发起问答
 curl --get "http://localhost:9090/api/baymd/rag/v3/chat" \
   --data-urlencode "question=头疼挂什么科"
 ```
+
+> **功能开关**：报告解读（`rag.report.enabled`）、主动随访（`rag.followup.enabled` + SMTP 配置）、视觉模型（`ai.vision`）默认关闭，按需开启后重启后端。
 
 ## 项目结构
 
@@ -155,6 +183,19 @@ DELETE /memory                   清空记忆
 
 # 反馈
 POST /conversations/messages/{id}/feedback  点赞/踩 → 联动 Fact
+
+# 报告解读
+POST /rag/report/upload      上传报告（multipart: jpg/png/pdf）
+GET  /rag/report/{id}        报告详情
+GET  /rag/v3/chat?reportId=  对话携带报告上下文
+
+# 主动随访
+GET  /followup/list              我的随访任务
+GET  /followup/{id}              深链取随访问题
+POST /followup/{id}/answered     标记已答
+GET  /followup/unsubscribe?token 免登录退订
+POST /user/email/bind            发送邮箱验证码
+POST /user/email/verify          验证并绑定邮箱
 
 # 知识库
 POST   /knowledge-base               创建

@@ -45,7 +45,7 @@ public class ExecutorRegistry {
      * 查找第一个 supports() 返回 true 的执行器（fallback 策略）
      */
     public ConversationExecutor resolve(StreamChatContext ctx) {
-        // 按优先级：CLARIFICATION > SYSTEM_ONLY > AGENT > RAG
+        // 按枚举声明顺序（即优先级）：EMERGENCY > CLARIFICATION > SYSTEM_ONLY > AGENT > RAG
         for (ExecutionMode mode : ExecutionMode.values()) {
             ConversationExecutor executor = executors.get(mode);
             if (executor != null && executor.supports(ctx)) {

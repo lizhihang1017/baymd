@@ -42,6 +42,14 @@ rocketmq:
 milvus:
   uri: http://localhost:19530
 
+# 邮件（主动随访用，默认注释，配置后开启 rag.followup.enabled=true）
+spring.mail:
+  host: ${MAIL_HOST:smtp.qq.com}
+  port: 465
+  username: ${MAIL_USERNAME:}
+  password: ${MAIL_PASSWORD:}    # QQ/163 用授权码
+  properties.mail.smtp.ssl.enable: true
+
 rag:
   react:
     enabled: true       # Agent 模式开关
@@ -93,6 +101,24 @@ rag:
     servers:
       - name: default
         url: http://localhost:9099
+
+  report:
+    enabled: true            # 报告解读功能默认关闭，配置 VLM 后开启
+    max-file-size-mb: 10
+    allowed-types: [image/jpeg, image/png, application/pdf]
+    bucket: baymd-reports
+    scan-detect-min-chars: 50
+
+  followup:
+    enabled: false            # 主动随访默认关闭，配置 SMTP 并验证后开启
+    scan-delay-ms: 60000
+    daily-limit-per-user: 1
+    topic-dedup-days: 7
+    quiet-hours: "22:00-08:00"
+    expire-days: 3
+    deep-link-base: http://localhost:5173
+    batch-size: 20
+    lock-seconds: 600
 
   search:
     channels:
@@ -180,6 +206,15 @@ ai:
         provider: noop
         model: noop
         priority: 100
+
+  # 视觉（多模态）模型 — 报告解读图片/扫描件解析用，默认注释（配置后启用）
+  vision:
+     default-model: qwen-vl-plus
+     candidates:
+       - id: qwen-vl-plus
+         provider: bailian
+         model: qwen-vl-plus
+         priority: 1
 
 rustfs:
   url: http://localhost:9000

@@ -128,6 +128,16 @@ public class RAGConstant {
     public static final String MCP_PARAMETER_EXTRACT_USER_PROMPT_PATH = "prompt/mcp-parameter-extract-user.st";
 
     /**
+     * 报告结构化提取提示词模板路径（Phase 1 报告解读）
+     */
+    public static final String REPORT_EXTRACT_PROMPT_PATH = "prompt/report-extract.st";
+
+    /**
+     * 随访规划提示词模板路径（Phase 2 主动随访）
+     */
+    public static final String FOLLOWUP_PLAN_PROMPT_PATH = "prompt/followup-plan.st";
+
+    /**
      * MCP-only 场景提示词模板路径
      * 仅动态数据片段时使用
      */
