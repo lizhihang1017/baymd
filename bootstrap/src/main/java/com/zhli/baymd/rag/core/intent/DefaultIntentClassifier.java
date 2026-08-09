@@ -26,11 +26,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
+import com.zhli.baymd.infra.config.AIModelProperties;
 import com.zhli.baymd.rag.dao.entity.IntentNodeDO;
 import com.zhli.baymd.rag.dao.mapper.IntentNodeMapper;
 import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -58,9 +61,17 @@ import static com.zhli.baymd.rag.constant.RAGConstant.INTENT_CLASSIFIER_PROMPT_P
 public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegistry {
 
     private final LLMService llmService;
+    private final AIModelProperties aiModelProperties;
     private final IntentNodeMapper intentNodeMapper;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
     private final IntentTreeCacheManager intentTreeCacheManager;
+
+    /** 快慢分层：意图分类等工具性调用走快速模型（未配置 fast-model 时为 null，走默认路由） */
+    private String fastModelId() {
+        return aiModelProperties != null && aiModelProperties.getChat() != null
+                ? aiModelProperties.getChat().getFastModel() : null;
+    }
 
     /**
      * 从Redis加载意图树并构建内存结构
@@ -138,18 +149,23 @@ public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegi
         // 每次都从Redis读取最新数据
         IntentTreeData data = loadIntentTreeData();
 
-        String systemPrompt = buildPrompt(data.leafNodes);
-        ChatRequest request = ChatRequest.builder()
+        Map<String, String> slots = Map.of("intent_list", buildIntentListText(data.leafNodes));
+        String systemPrompt = promptConfigService.system(PromptScenes.INTENT_CLASSIFY,
+                () -> promptTemplateLoader.render(INTENT_CLASSIFIER_PROMPT_PATH, slots), slots);
+        Map<String, String> userSlots = Map.of("question", question);
+        ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                 .messages(List.of(
                         ChatMessage.system(systemPrompt),
-                        ChatMessage.user(question)
+                        ChatMessage.user(promptConfigService.user(
+                                PromptScenes.INTENT_CLASSIFY, () -> question, userSlots))
                 ))
                 .temperature(0.1D)
                 .topP(0.3D)
-                .thinking(false)
-                .build();
+                .thinking(false);
+        promptConfigService.applyParams(PromptScenes.INTENT_CLASSIFY, rb);
+        ChatRequest request = rb.build();
 
-        String raw = llmService.chat(request);
+        String raw = llmService.chat(request, fastModelId());
 
         try {
             // 移除可能的 markdown 代码块标记
@@ -226,7 +242,10 @@ public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegi
      * - 特别强调：如果问题里只提到 "OA系统"，不要选 "保险系统" 的分类
      * - 如果存在 MCP 类型节点，使用增强版 Prompt 并添加 type/toolId 标识
      */
-    private String buildPrompt(List<IntentNode> leafNodes) {
+    /**
+     * 构建意图叶子节点清单文本（供意图分类 system 提示词 / 覆盖模板的 {intent_list} 槽位使用）。
+     */
+    private String buildIntentListText(List<IntentNode> leafNodes) {
         StringBuilder sb = new StringBuilder();
 
         for (IntentNode node : leafNodes) {
@@ -254,10 +273,7 @@ public class DefaultIntentClassifier implements IntentClassifier, IntentNodeRegi
             sb.append("\n");
         }
 
-        return promptTemplateLoader.render(
-                INTENT_CLASSIFIER_PROMPT_PATH,
-                Map.of("intent_list", sb.toString())
-        );
+        return sb.toString();
     }
 
     private List<IntentNode> loadIntentTreeFromDB() {

@@ -30,5 +30,5 @@ public class ChunkStrategyVO {
 
     private String label;
 
-    private Map<String, Integer> defaultConfig;
+    private Map<String, Object> defaultConfig;
 }

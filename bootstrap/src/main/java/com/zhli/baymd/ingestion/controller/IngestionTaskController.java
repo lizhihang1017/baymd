@@ -17,6 +17,7 @@
 
 package com.zhli.baymd.ingestion.controller;
 
+import com.zhli.baymd.framework.auth.RequireAdmin;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhli.baymd.ingestion.controller.request.IngestionTaskCreateRequest;
@@ -47,6 +48,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Validated
+@RequireAdmin
 public class IngestionTaskController {
 
     private final IngestionTaskService taskService;

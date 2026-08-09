@@ -17,6 +17,7 @@
 
 package com.zhli.baymd.rag.controller;
 
+import com.zhli.baymd.framework.auth.RequireAdmin;
 import com.zhli.baymd.rag.controller.request.IntentNodeBatchRequest;
 import com.zhli.baymd.rag.controller.request.IntentNodeCreateRequest;
 import com.zhli.baymd.rag.controller.vo.IntentNodeTreeVO;
@@ -41,6 +42,7 @@ import java.util.List;
  */
 @RestController
 @RequiredArgsConstructor
+@RequireAdmin
 public class IntentTreeController {
 
     private final IntentTreeService intentTreeService;

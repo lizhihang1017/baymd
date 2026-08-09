@@ -61,12 +61,12 @@ public abstract class AbstractOpenAIStyleChatClient implements ChatClient {
 
     /**
      * 子类可覆写此方法添加提供商特有的请求体字段
-     * 默认实现：当请求开启 thinking 时添加 enable_thinking 字段
+     * 默认实现：显式发送 enable_thinking，避免提供商默认开启思考导致首包极慢。
+     * <p>开启思考 → {@code enable_thinking:true}；未开启 → {@code enable_thinking:false}。
+     * 不支持的提供商可忽略该字段，无副作用。</p>
      */
     protected void customizeRequestBody(JsonObject body, ChatRequest request) {
-        if (Boolean.TRUE.equals(request.getThinking())) {
-            body.addProperty("enable_thinking", true);
-        }
+        body.addProperty("enable_thinking", Boolean.TRUE.equals(request.getThinking()));
     }
 
     /**

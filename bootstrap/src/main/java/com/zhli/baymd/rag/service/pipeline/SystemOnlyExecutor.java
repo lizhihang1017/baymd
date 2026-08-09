@@ -7,6 +7,8 @@ import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.chat.StreamCancellationHandle;
 import com.zhli.baymd.rag.core.intent.IntentResolver;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import com.zhli.baymd.rag.service.handler.StreamTaskManager;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static com.zhli.baymd.rag.constant.RAGConstant.CHAT_SYSTEM_PROMPT_PATH;
 
@@ -29,6 +32,7 @@ public class SystemOnlyExecutor implements ConversationExecutor {
     private final LLMService llmService;
     private final IntentResolver intentResolver;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
     private final StreamTaskManager taskManager;
 
     @Override
@@ -52,26 +56,30 @@ public class SystemOnlyExecutor implements ConversationExecutor {
                 .findFirst()
                 .orElse(null);
 
-        String systemPrompt = StrUtil.isNotBlank(customPrompt)
-                ? customPrompt
-                : promptTemplateLoader.load(CHAT_SYSTEM_PROMPT_PATH);
+        String userQuestion = ctx.getRewriteResult() != null
+                ? ctx.getRewriteResult().rewrittenQuestion()
+                : ctx.getQuestion();
+        Map<String, String> slots = Map.of("question", StrUtil.nullToEmpty(userQuestion));
+
+        String systemPrompt = promptConfigService.system(PromptScenes.SYSTEM_ONLY, () ->
+                StrUtil.isNotBlank(customPrompt)
+                        ? customPrompt
+                        : promptTemplateLoader.load(CHAT_SYSTEM_PROMPT_PATH), slots);
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(ChatMessage.system(systemPrompt));
         if (CollUtil.isNotEmpty(ctx.getHistory())) {
             messages.addAll(ctx.getHistory());
         }
-        messages.add(ChatMessage.user(
-                ctx.getRewriteResult() != null
-                        ? ctx.getRewriteResult().rewrittenQuestion()
-                        : ctx.getQuestion()
-        ));
+        messages.add(ChatMessage.user(promptConfigService.user(
+                PromptScenes.SYSTEM_ONLY, () -> userQuestion, slots)));
 
-        ChatRequest req = ChatRequest.builder()
+        ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                 .messages(messages)
                 .temperature(0.7)
-                .thinking(false)
-                .build();
+                .thinking(false);
+        promptConfigService.applyParams(PromptScenes.SYSTEM_ONLY, rb);
+        ChatRequest req = rb.build();
 
         StreamCancellationHandle handle = llmService.streamChat(req, ctx.getCallback());
         taskManager.bindHandle(ctx.getTaskId(), handle);

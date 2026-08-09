@@ -36,7 +36,7 @@ public record TextBoundaryOptions(
 ) implements ChunkingOptions {
 
     @Override
-    public Map<String, Integer> toConfigMap() {
+    public Map<String, Object> toConfigMap() {
         return Map.of("targetChars", targetChars, "overlapChars", overlapChars,
                 "maxChars", maxChars, "minChars", minChars);
     }

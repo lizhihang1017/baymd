@@ -11,7 +11,9 @@ import com.zhli.baymd.rag.core.followup.FollowUpGenerator;
 import com.zhli.baymd.rag.core.memory.extract.MemoryExtractionOrchestrator;
 import com.zhli.baymd.rag.core.intent.IntentResolver;
 import com.zhli.baymd.rag.core.prompt.EvidenceBudgetService;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
 import com.zhli.baymd.rag.core.prompt.PromptContext;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.RAGPromptService;
 import com.zhli.baymd.rag.core.retrieve.RetrievalEngine;
 import com.zhli.baymd.rag.dto.IntentGroup;
@@ -36,6 +38,7 @@ public class RagExecutor implements ConversationExecutor {
     private final RetrievalEngine retrievalEngine;
     private final LLMService llmService;
     private final RAGPromptService promptBuilder;
+    private final PromptConfigService promptConfigService;
     private final IntentResolver intentResolver;
     private final EvidenceBudgetService evidenceBudgetService;
     private final StreamTaskManager taskManager;
@@ -104,12 +107,13 @@ public class RagExecutor implements ConversationExecutor {
                         : List.of()
         );
 
-        ChatRequest chatRequest = ChatRequest.builder()
+        ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                 .messages(messages)
                 .thinking(ctx.isDeepThinking())
                 .temperature(retrievalCtx.hasMcp() ? 0.3 : 0.0)
-                .topP(retrievalCtx.hasMcp() ? 0.8 : 1.0)
-                .build();
+                .topP(retrievalCtx.hasMcp() ? 0.8 : 1.0);
+        promptConfigService.applyParams(PromptScenes.RAG_ANSWER, rb);
+        ChatRequest chatRequest = rb.build();
 
         // 用增强回调包裹：自动收集引用、生成追问、异步评估质量
         String question = ctx.getRewriteResult() != null

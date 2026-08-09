@@ -24,11 +24,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
+import com.zhli.baymd.infra.config.AIModelProperties;
 import com.zhli.baymd.rag.config.RAGConfigProperties;
 import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.framework.trace.RagTraceNode;
 import com.zhli.baymd.infra.chat.LLMService;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +40,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.zhli.baymd.rag.constant.RAGConstant.QUERY_REWRITE_AND_SPLIT_PROMPT_PATH;
@@ -50,10 +54,18 @@ import static com.zhli.baymd.rag.constant.RAGConstant.QUERY_REWRITE_AND_SPLIT_PR
 public class MultiQuestionRewriteService implements QueryRewriteService {
 
     private final LLMService llmService;
+    private final AIModelProperties aiModelProperties;
     private final RAGConfigProperties ragConfigProperties;
     private final QueryTermMappingService queryTermMappingService;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
     private final DecompositionQualityService qualityService;
+
+    /** 快慢分层：改写等工具性调用走快速模型（未配置 fast-model 时为 null，走默认路由） */
+    private String fastModelId() {
+        return aiModelProperties != null && aiModelProperties.getChat() != null
+                ? aiModelProperties.getChat().getFastModel() : null;
+    }
 
     @Override
     @RagTraceNode(name = "query-rewrite", type = "REWRITE")
@@ -101,11 +113,13 @@ public class MultiQuestionRewriteService implements QueryRewriteService {
     private RewriteResult callLLMRewriteAndSplit(String normalizedQuestion,
                                                  String originalQuestion,
                                                  List<ChatMessage> history) {
-        String systemPrompt = promptTemplateLoader.load(QUERY_REWRITE_AND_SPLIT_PROMPT_PATH);
+        Map<String, String> slots = Map.of("question", normalizedQuestion);
+        String systemPrompt = promptConfigService.system(PromptScenes.QUERY_REWRITE,
+                () -> promptTemplateLoader.load(QUERY_REWRITE_AND_SPLIT_PROMPT_PATH), slots);
         ChatRequest req = buildRewriteRequest(systemPrompt, normalizedQuestion, history);
 
         try {
-            String raw = llmService.chat(req);
+            String raw = llmService.chat(req, fastModelId());
             RewriteResult parsed = parseRewriteAndSplit(raw);
 
             if (parsed != null) {
@@ -162,14 +176,17 @@ public class MultiQuestionRewriteService implements QueryRewriteService {
             messages.addAll(recentHistory);
         }
 
-        messages.add(ChatMessage.user(question));
+        Map<String, String> userSlots = Map.of("question", question);
+        messages.add(ChatMessage.user(promptConfigService.user(
+                PromptScenes.QUERY_REWRITE, () -> question, userSlots)));
 
-        return ChatRequest.builder()
+        ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                 .messages(messages)
                 .temperature(0.1D)
                 .topP(0.3D)
-                .thinking(false)
-                .build();
+                .thinking(false);
+        promptConfigService.applyParams(PromptScenes.QUERY_REWRITE, rb);
+        return rb.build();
     }
 
 

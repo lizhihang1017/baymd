@@ -6,6 +6,8 @@ import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.dao.entity.UserFactDO;
 import com.zhli.baymd.rag.dao.mapper.UserFactMapper;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import java.util.stream.Collectors;
 public class FactMergingService {
 
     private final LLMService llmService;
+    private final PromptConfigService promptConfigService;
     private final UserFactMapper factMapper;
     private static final Gson GSON = new Gson();
     private static final int MERGE_THRESHOLD = 10;
@@ -70,10 +73,14 @@ public class FactMergingService {
                 .collect(Collectors.joining("\n"));
 
         try {
-            String raw = llmService.chat(ChatRequest.builder()
-                    .messages(List.of(ChatMessage.system(MERGE_PROMPT),
-                            ChatMessage.user(factList)))
-                    .temperature(0.1).maxTokens(512).build());
+            Map<String, String> slots = Map.of("fact_list", factList);
+            String system = promptConfigService.system(PromptScenes.MEMORY_FACT_MERGE, () -> MERGE_PROMPT, slots);
+            String user = promptConfigService.user(PromptScenes.MEMORY_FACT_MERGE, () -> factList, slots);
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
+                    .messages(List.of(ChatMessage.system(system), ChatMessage.user(user)))
+                    .temperature(0.1).maxTokens(512);
+            promptConfigService.applyParams(PromptScenes.MEMORY_FACT_MERGE, rb);
+            String raw = llmService.chat(rb.build());
 
             String cleaned = LLMResponseCleaner.stripMarkdownCodeFence(raw);
             JsonObject obj = GSON.fromJson(cleaned, JsonObject.class);

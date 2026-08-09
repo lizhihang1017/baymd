@@ -27,6 +27,7 @@ public class UserEpisodeDO {
     private String summary;
 
     /** PG array: topics TEXT[] */
+    @TableField(typeHandler = com.zhli.baymd.rag.dao.handler.PgStringArrayTypeHandler.class)
     private String[] topics;
 
     @TableField(fill = FieldFill.INSERT)

@@ -17,6 +17,7 @@
 
 package com.zhli.baymd.rag.controller;
 
+import com.zhli.baymd.framework.auth.RequireAdmin;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zhli.baymd.framework.convention.Result;
 import com.zhli.baymd.framework.web.Results;
@@ -39,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequiredArgsConstructor
+@RequireAdmin
 public class QueryTermMappingController {
 
     private final QueryTermMappingAdminService queryTermMappingAdminService;

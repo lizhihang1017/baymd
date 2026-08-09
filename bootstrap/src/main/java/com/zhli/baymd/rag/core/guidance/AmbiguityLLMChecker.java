@@ -26,11 +26,14 @@ import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
 import com.zhli.baymd.rag.core.intent.IntentNode;
 import com.zhli.baymd.rag.core.intent.NodeScore;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -48,28 +51,31 @@ public class AmbiguityLLMChecker {
 
     private final LLMService llmService;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
 
     /**
      * 调用 LLM 确认是否存在歧义
      */
     public boolean checkAmbiguity(String question, List<NodeScore> ranked) {
         String candidatesText = buildCandidatesText(ranked);
-        String prompt = promptTemplateLoader.render(
-                GUIDANCE_AMBIGUITY_CHECK_PROMPT_PATH,
-                Map.of(
-                        "question", question,
-                        "candidates", candidatesText
-                )
-        );
+        Map<String, String> slots = Map.of("question", question, "candidates", candidatesText);
+        String prompt = promptConfigService.user(PromptScenes.AMBIGUITY_CHECK,
+                () -> promptTemplateLoader.render(GUIDANCE_AMBIGUITY_CHECK_PROMPT_PATH, slots), slots);
 
-        ChatRequest request = ChatRequest.builder()
-                .messages(List.of(
-                        ChatMessage.user(prompt)
-                ))
+        List<ChatMessage> messages = new ArrayList<>();
+        if (promptConfigService.hasSystem(PromptScenes.AMBIGUITY_CHECK)) {
+            messages.add(ChatMessage.system(promptConfigService.system(
+                    PromptScenes.AMBIGUITY_CHECK, () -> "", slots)));
+        }
+        messages.add(ChatMessage.user(prompt));
+
+        ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
+                .messages(messages)
                 .temperature(0.1D)
                 .topP(0.3D)
-                .thinking(false)
-                .build();
+                .thinking(false);
+        promptConfigService.applyParams(PromptScenes.AMBIGUITY_CHECK, rb);
+        ChatRequest request = rb.build();
 
         try {
             String raw = llmService.chat(request);

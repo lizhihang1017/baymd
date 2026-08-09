@@ -6,6 +6,8 @@ import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.dao.entity.UserEpisodeDO;
 import com.zhli.baymd.rag.dao.mapper.UserEpisodeMapper;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -20,6 +23,7 @@ import java.util.List;
 public class EpisodeExtractionService {
 
     private final LLMService llmService;
+    private final PromptConfigService promptConfigService;
     private final UserEpisodeMapper episodeMapper;
     private static final Gson GSON = new Gson();
 
@@ -32,10 +36,16 @@ public class EpisodeExtractionService {
                                          String userId, String conversationId) {
         String raw;
         try {
-            raw = llmService.chat(ChatRequest.builder()
-                    .messages(List.of(ChatMessage.system(PROMPT),
-                            ChatMessage.user("用户问题: " + question + "\n系统回答: " + answer)))
-                    .temperature(0.1).maxTokens(256).build());
+            Map<String, String> slots = Map.of("question", question == null ? "" : question,
+                    "answer", answer == null ? "" : answer);
+            String system = promptConfigService.system(PromptScenes.MEMORY_EPISODE, () -> PROMPT, slots);
+            String user = promptConfigService.user(PromptScenes.MEMORY_EPISODE, () ->
+                    "用户问题: " + question + "\n系统回答: " + answer, slots);
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
+                    .messages(List.of(ChatMessage.system(system), ChatMessage.user(user)))
+                    .temperature(0.1).maxTokens(256);
+            promptConfigService.applyParams(PromptScenes.MEMORY_EPISODE, rb);
+            raw = llmService.chat(rb.build());
         } catch (Exception e) {
             log.warn("Episode 提取 LLM 调用失败", e);
             return null;

@@ -3,10 +3,14 @@ package com.zhli.baymd.rag.service.pipeline;
 import com.zhli.baymd.rag.config.ReActProperties;
 import com.zhli.baymd.rag.core.agent.ReActAgentService;
 import com.zhli.baymd.rag.core.agent.ReActLoop;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
+import java.util.Map;
 
 import static com.zhli.baymd.rag.constant.RAGConstant.CHAT_SYSTEM_PROMPT_PATH;
 
@@ -27,6 +31,7 @@ public class AgentExecutor implements ConversationExecutor {
 
     private final ReActAgentService agentService;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
     private final ReActProperties reActProperties;
 
     @Override
@@ -56,10 +61,12 @@ public class AgentExecutor implements ConversationExecutor {
 
     @Override
     public void execute(StreamChatContext ctx) {
-        String systemPrompt = promptTemplateLoader.load(CHAT_SYSTEM_PROMPT_PATH);
         String baseQuestion = ctx.getRewriteResult() != null
                 ? ctx.getRewriteResult().rewrittenQuestion()
                 : ctx.getQuestion();
+        String systemPrompt = promptConfigService.system(PromptScenes.AGENT_MAIN,
+                () -> promptTemplateLoader.load(CHAT_SYSTEM_PROMPT_PATH),
+                Map.of("question", baseQuestion == null ? "" : baseQuestion));
         // 若用户上传了报告，将报告内容拼入用户问题供 Agent 参考
         String question = ctx.getReportContext() != null && !ctx.getReportContext().isBlank()
                 ? ctx.getReportContext() + "\n\n用户问题：" + baseQuestion

@@ -50,20 +50,27 @@ public class RAGPromptService {
 
     private final PromptTemplateLoader templateLoader;
     private final EvidenceBudgetService evidenceBudgetService;
+    private final PromptConfigService promptConfigService;
 
     /**
-     * 生成系统提示词，并对模板格式做清理
+     * 生成系统提示词，并对模板格式做清理。
+     * <p>若 DB 配置了 {@code rag_answer} 场景的 system 覆盖，则优先使用覆盖（支持 {@code {question}} 槽位）。</p>
      */
     public String buildSystemPrompt(PromptContext context) {
         PromptBuildPlan plan = plan(context);
-        String template = StrUtil.isNotBlank(plan.getBaseTemplate())
-                ? plan.getBaseTemplate()
-                : defaultTemplate(plan.getScene());
-        return StrUtil.isBlank(template) ? "" : PromptTemplateUtils.cleanupPrompt(template);
+        Map<String, String> slots = Map.of("question", StrUtil.nullToEmpty(context.getQuestion()));
+        return promptConfigService.system(PromptScenes.RAG_ANSWER, () -> {
+            String template = StrUtil.isNotBlank(plan.getBaseTemplate())
+                    ? plan.getBaseTemplate()
+                    : defaultTemplate(plan.getScene());
+            return StrUtil.isBlank(template) ? "" : PromptTemplateUtils.cleanupPrompt(template);
+        }, slots);
     }
 
     /**
      * 构造发送给 LLM 的完整消息列表（system + evidence + history + user）
+     * <p>若 DB 配置了 {@code rag_answer} 场景的 user 覆盖，则用户消息改为覆盖模板
+     * （支持 {@code {evidence}}、{@code {question}}、{@code {sub_questions}} 槽位）。</p>
      */
     public List<ChatMessage> buildStructuredMessages(PromptContext context,
                                                      List<ChatMessage> history,
@@ -85,7 +92,20 @@ public class RAGPromptService {
         // 3. 证据 + 问题（合并为一条 user message）
         String evidenceBody = buildEvidenceBody(context);
         String userQuestion = buildUserQuestion(question, subQuestions);
-        String userContent = mergeEvidenceAndQuestion(evidenceBody, userQuestion);
+        String defaultUserContent = mergeEvidenceAndQuestion(evidenceBody, userQuestion);
+        String userContent;
+        if (promptConfigService.hasUser(PromptScenes.RAG_ANSWER)) {
+            String subQs = subQuestions == null || subQuestions.size() < 2
+                    ? "" : String.join("\n", subQuestions);
+            Map<String, String> slots = Map.of(
+                    "evidence", StrUtil.nullToEmpty(evidenceBody),
+                    "question", StrUtil.nullToEmpty(question),
+                    "sub_questions", subQs);
+            userContent = promptConfigService.user(PromptScenes.RAG_ANSWER,
+                    () -> defaultUserContent, slots);
+        } else {
+            userContent = defaultUserContent;
+        }
         if (StrUtil.isNotBlank(userContent)) {
             messages.add(ChatMessage.user(userContent));
         }

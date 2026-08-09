@@ -66,6 +66,12 @@ public class FixedSizeTextChunker implements ChunkingStrategy {
                     .build());
         }
 
+        // 自定义分隔符模式：按分隔符切分后打包到 ≤ chunkSize（Dify 风格）。
+        // 注意用 isEmpty 而非 isBlank：分隔符可能本身就是空白（如 "\n\n" 段落分隔符）
+        if (opts.separator() != null && !opts.separator().isEmpty()) {
+            return chunkBySeparator(normalized, opts);
+        }
+
         int chunkSize = Math.max(1, configuredChunkSize);
         int overlap = Math.max(0, opts.overlapSize());
 
@@ -109,6 +115,52 @@ public class FixedSizeTextChunker implements ChunkingStrategy {
         }
 
         return chunks;
+    }
+
+    /**
+     * 自定义分隔符切分：按分隔符切分段落，再打包到 ≤ chunkSize（Dify 风格）。
+     * 单个超长段落（无分隔符可拆）保持完整，不强行截断。
+     */
+    private List<VectorChunk> chunkBySeparator(String text, FixedSizeOptions opts) {
+        String sep = opts.separator();
+        int chunkSize = Math.max(1, opts.chunkSize());
+        String[] segments = text.split(java.util.regex.Pattern.quote(sep), -1);
+
+        List<VectorChunk> chunks = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        int index = 0;
+
+        for (String seg : segments) {
+            String s = seg.trim();
+            if (s.isEmpty()) {
+                continue;
+            }
+            // 当前块 + 分隔符 + 下一段 超长 → 先封块
+            if (sb.length() > 0 && sb.length() + sep.length() + s.length() > chunkSize) {
+                chunks.add(newChunk(index++, sb.toString()));
+                sb.setLength(0);
+            }
+            if (sb.length() > 0) {
+                sb.append(sep);
+            }
+            sb.append(s);
+        }
+        if (sb.length() > 0) {
+            chunks.add(newChunk(index, sb.toString()));
+        }
+        // 兜底：分隔符未命中任何内容时退化为整篇
+        if (chunks.isEmpty() && !text.isBlank()) {
+            chunks.add(newChunk(0, text.trim()));
+        }
+        return chunks;
+    }
+
+    private VectorChunk newChunk(int index, String content) {
+        return VectorChunk.builder()
+                .chunkId(IdUtil.getSnowflakeNextIdStr())
+                .index(index)
+                .content(content)
+                .build();
     }
 
     /**

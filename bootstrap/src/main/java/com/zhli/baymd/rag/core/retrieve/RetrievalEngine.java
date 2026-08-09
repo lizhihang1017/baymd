@@ -23,6 +23,7 @@ import com.zhli.baymd.framework.convention.RetrievedChunk;
 import com.zhli.baymd.framework.convention.ToolGuardrails;
 import com.zhli.baymd.framework.trace.RagTraceNode;
 import com.zhli.baymd.rag.config.SearchChannelProperties;
+import com.zhli.baymd.rag.core.agent.ToolSwitchStore;
 import com.zhli.baymd.rag.core.guardrails.GuardrailsFactory;
 import com.zhli.baymd.rag.core.intent.IntentNode;
 import com.zhli.baymd.rag.core.intent.NodeScore;
@@ -287,6 +288,11 @@ public class RetrievalEngine {
 
     private CallToolResult executeSingleMcpTool(String question, IntentNode intentNode) {
         String toolId = intentNode.getMcpToolId();
+        // 工具开关：MCP 工具未启用时跳过执行
+        if (!ToolSwitchStore.isEnabled(toolId)) {
+            log.warn("MCP 工具未启用（工具开关已关闭）: {}", toolId);
+            return null;
+        }
         Optional<McpToolExecutor> executorOpt = mcpToolRegistry.getExecutor(toolId);
         if (executorOpt.isEmpty()) {
             log.warn("MCP 工具不存在: {}", toolId);

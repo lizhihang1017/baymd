@@ -17,6 +17,7 @@
 
 package com.zhli.baymd.knowledge.controller;
 
+import com.zhli.baymd.framework.auth.RequireAdmin;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhli.baymd.knowledge.controller.request.KnowledgeDocumentPageRequest;
@@ -53,6 +54,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Validated
+@RequireAdmin
 public class KnowledgeDocumentController {
 
     private final KnowledgeDocumentService documentService;

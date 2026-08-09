@@ -33,6 +33,8 @@ import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.framework.exception.ClientException;
 import com.zhli.baymd.infra.chat.LLMService;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import com.zhli.baymd.rag.service.ConversationService;
 import com.zhli.baymd.rag.service.bo.ConversationCreateBO;
@@ -61,6 +63,7 @@ public class ConversationServiceImpl implements ConversationService {
     private final ConversationSummaryMapper summaryMapper;
     private final MemoryProperties memoryProperties;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
     private final LLMService llmService;
 
     @Override
@@ -188,21 +191,26 @@ public class ConversationServiceImpl implements ConversationService {
         if (maxLen <= 0) {
             maxLen = 30;
         }
-        String prompt = promptTemplateLoader.render(
-                CONVERSATION_TITLE_PROMPT_PATH,
-                Map.of(
-                        "title_max_chars", String.valueOf(maxLen),
-                        "question", question
-                )
-        );
+        Map<String, String> slots = Map.of(
+                "title_max_chars", String.valueOf(maxLen),
+                "question", question);
+        String prompt = promptConfigService.user(PromptScenes.CONVERSATION_TITLE,
+                () -> promptTemplateLoader.render(CONVERSATION_TITLE_PROMPT_PATH, slots), slots);
 
         try {
-            ChatRequest request = ChatRequest.builder()
-                    .messages(List.of(ChatMessage.user(prompt)))
+            List<ChatMessage> messages = new java.util.ArrayList<>();
+            if (promptConfigService.hasSystem(PromptScenes.CONVERSATION_TITLE)) {
+                messages.add(ChatMessage.system(promptConfigService.system(
+                        PromptScenes.CONVERSATION_TITLE, () -> "", slots)));
+            }
+            messages.add(ChatMessage.user(prompt));
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
+                    .messages(messages)
                     .temperature(0.7D)
                     .topP(0.3D)
-                    .thinking(false)
-                    .build();
+                    .thinking(false);
+            promptConfigService.applyParams(PromptScenes.CONVERSATION_TITLE, rb);
+            ChatRequest request = rb.build();
 
             return llmService.chat(request);
         } catch (Exception ex) {

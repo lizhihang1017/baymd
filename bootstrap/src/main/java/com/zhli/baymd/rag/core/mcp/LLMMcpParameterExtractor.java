@@ -28,6 +28,8 @@ import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import io.modelcontextprotocol.spec.McpSchema.JsonSchema;
 import io.modelcontextprotocol.spec.McpSchema.Tool;
@@ -57,6 +59,7 @@ public class LLMMcpParameterExtractor implements McpParameterExtractor {
 
     private final LLMService llmService;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
     private final Gson gson = new Gson();
 
     @Override
@@ -72,26 +75,29 @@ public class LLMMcpParameterExtractor implements McpParameterExtractor {
 
         // 构建 Prompt：优先使用自定义提示词
         List<ChatMessage> messages = new ArrayList<>(2);
-        String systemPrompt = StrUtil.isNotBlank(customPromptTemplate)
-                ? customPromptTemplate
-                : promptTemplateLoader.load(MCP_PARAMETER_EXTRACT_PROMPT_PATH);
+        Map<String, String> slots = Map.of(
+                "tool_definition", buildToolDefinition(tool),
+                "user_question", StrUtil.nullToEmpty(userQuestion));
+        String systemPrompt = promptConfigService.system(PromptScenes.MCP_PARAM_EXTRACT, () ->
+                StrUtil.isNotBlank(customPromptTemplate)
+                        ? customPromptTemplate
+                        : promptTemplateLoader.load(MCP_PARAMETER_EXTRACT_PROMPT_PATH), slots);
 
         messages.add(ChatMessage.system(systemPrompt));
-        String userPrompt = promptTemplateLoader.render(MCP_PARAMETER_EXTRACT_USER_PROMPT_PATH, Map.of(
-                "tool_definition", buildToolDefinition(tool),
-                "user_question", userQuestion
-        ));
+        String userPrompt = promptConfigService.user(PromptScenes.MCP_PARAM_EXTRACT, () ->
+                promptTemplateLoader.render(MCP_PARAMETER_EXTRACT_USER_PROMPT_PATH, slots), slots);
         messages.add(ChatMessage.user(userPrompt));
 
         String raw = null;
         try {
             // 调用 LLM 提取参数
-            ChatRequest request = ChatRequest.builder()
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                     .messages(messages)
                     .temperature(0.1D)
                     .topP(0.3D)
-                    .thinking(false)
-                    .build();
+                    .thinking(false);
+            promptConfigService.applyParams(PromptScenes.MCP_PARAM_EXTRACT, rb);
+            ChatRequest request = rb.build();
             raw = llmService.chat(request);
             log.info("MCP 参数提取 LLM 响应: {}", raw);
 

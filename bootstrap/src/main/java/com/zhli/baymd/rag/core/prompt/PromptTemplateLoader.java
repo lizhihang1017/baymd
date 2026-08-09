@@ -55,6 +55,11 @@ public class PromptTemplateLoader {
         if (StrUtil.isBlank(path)) {
             throw new IllegalArgumentException("提示模板路径为空");
         }
+        // DB 覆盖优先（管理员可在系统配置中覆盖提示词）
+        String override = PromptOverrideStore.get(path);
+        if (override != null) {
+            return override;
+        }
         return cache.computeIfAbsent(path, this::readResource);
     }
 

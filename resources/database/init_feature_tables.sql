@@ -65,3 +65,51 @@ CREATE TABLE IF NOT EXISTS t_drug_interaction (
 );
 CREATE INDEX IF NOT EXISTS idx_drug_int_a ON t_drug_interaction (drug_a);
 CREATE INDEX IF NOT EXISTS idx_drug_int_b ON t_drug_interaction (drug_b);
+
+-- ---------- 语义记忆表（t_user_fact / t_user_episode 及向量表）----------
+CREATE TABLE IF NOT EXISTS t_user_fact (
+    id            VARCHAR(64) PRIMARY KEY,
+    user_id       VARCHAR(64) NOT NULL,
+    fact_type     VARCHAR(32) NOT NULL,
+    fact_text     TEXT NOT NULL,
+    confidence    FLOAT DEFAULT 1.0,
+    source_msg_id VARCHAR(64),
+    content_hash  VARCHAR(64),
+    created_at    TIMESTAMP DEFAULT NOW(),
+    updated_at    TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_fact_user ON t_user_fact(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_user_fact_hash ON t_user_fact(user_id, content_hash);
+
+CREATE TABLE IF NOT EXISTS t_user_fact_vector (
+    id        VARCHAR(64) PRIMARY KEY REFERENCES t_user_fact(id) ON DELETE CASCADE,
+    embedding vector(1024)
+);
+CREATE INDEX IF NOT EXISTS idx_fact_vec_hnsw ON t_user_fact_vector USING hnsw (embedding vector_cosine_ops);
+
+CREATE TABLE IF NOT EXISTS t_user_episode (
+    id              VARCHAR(64) PRIMARY KEY,
+    user_id         VARCHAR(64) NOT NULL,
+    conversation_id VARCHAR(64) NOT NULL,
+    title           VARCHAR(256),
+    summary         TEXT,
+    topics          TEXT[],
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_episode_user ON t_user_episode(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS t_user_episode_vector (
+    id        VARCHAR(64) PRIMARY KEY REFERENCES t_user_episode(id) ON DELETE CASCADE,
+    embedding vector(1024)
+);
+CREATE INDEX IF NOT EXISTS idx_ep_vec_hnsw ON t_user_episode_vector USING hnsw (embedding vector_cosine_ops);
+
+-- ---------- 运行时配置表（DB 覆盖 yaml，重启生效）----------
+CREATE TABLE IF NOT EXISTS t_app_config (
+    id           VARCHAR(20) NOT NULL PRIMARY KEY,
+    section      VARCHAR(32) NOT NULL,
+    config_value JSONB NOT NULL,
+    updated_at   TIMESTAMP DEFAULT NOW(),
+    deleted      SMALLINT NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_app_config_section ON t_app_config (section);

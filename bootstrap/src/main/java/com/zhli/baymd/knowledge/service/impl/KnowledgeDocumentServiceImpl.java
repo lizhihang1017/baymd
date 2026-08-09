@@ -776,7 +776,8 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
             throw new ClientException("分块参数JSON格式不合法");
         }
         for (String key : mode.getDefaultConfig().keySet()) {
-            if (!config.containsKey(key)) {
+            // separator 为可选字段，缺省时使用默认行为（按固定大小+重叠切分）
+            if (!"separator".equals(key) && !config.containsKey(key)) {
                 throw new ClientException("分块参数缺少必要字段: " + key);
             }
         }

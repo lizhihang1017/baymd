@@ -5,6 +5,7 @@ import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.chat.StreamCallback;
 import com.zhli.baymd.rag.config.ReActProperties;
 import com.zhli.baymd.rag.core.guardrails.GuardrailsFactory;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ public class ReActAgentService {
     private final AgentToolRegistry toolRegistry;
     private final GuardrailsFactory guardrailsFactory;
     private final ReActProperties properties;
+    private final PromptConfigService promptConfigService;
 
     @PostConstruct
     void init() {
@@ -105,6 +107,7 @@ public class ReActAgentService {
                 .toolRegistry(toolRegistry)
                 .guardrailsFactory(guardrailsFactory)
                 .maxIterations(properties.getMaxIterations())
+                .promptConfigService(promptConfigService)
                 .build();
     }
 }

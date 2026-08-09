@@ -18,6 +18,6 @@ public class BaiLianEmbeddingClient extends AbstractOpenAIStyleEmbeddingClient {
 
     @Override
     protected int maxBatchSize() {
-        return 32;
+        return 10; // MaaS 端点单次最大批量 10
     }
 }

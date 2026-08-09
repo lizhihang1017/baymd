@@ -1,15 +1,25 @@
 import { useState, useEffect } from 'react'
-import { Settings, Trash2, Shield, Activity, Mail } from 'lucide-react'
-import { getSettings, clearMemory, getTraces, bindEmail, verifyEmail } from '../api/baymd'
+import { Settings, Trash2, Shield, Activity, ChevronLeft, Loader2, SlidersHorizontal } from 'lucide-react'
+import { getSettings, clearMemory, getTraces, getTraceDetail } from '../api/baymd'
+import { AiConfigForm, RagConfigForm } from './ConfigForms'
+import type { TraceDetail, TraceNode } from '../api/baymd'
 
 export default function SettingsView() {
   const [settings, setSettings] = useState<any>(null)
   const [traces, setTraces] = useState<any[]>([])
   const [memoryCleared, setMemoryCleared] = useState(false)
-  const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [codeSent, setCodeSent] = useState(false)
-  const [emailMsg, setEmailMsg] = useState('')
+  const [selectedTrace, setSelectedTrace] = useState<TraceDetail | null>(null)
+  const [traceLoading, setTraceLoading] = useState(false)
+
+  const handleTraceClick = async (traceId: string) => {
+    setTraceLoading(true)
+    try {
+      const detail = await getTraceDetail(traceId)
+      setSelectedTrace(detail)
+    } catch { /* ignore */ } finally {
+      setTraceLoading(false)
+    }
+  }
 
   useEffect(() => {
     getSettings().then(res => setSettings(res.data)).catch(() => {})
@@ -24,37 +34,13 @@ export default function SettingsView() {
     } catch {}
   }
 
-  const handleSendCode = async () => {
-    setEmailMsg('')
-    try {
-      const res = await bindEmail(email)
-      if (!res.success) throw new Error(res.message || '发送失败')
-      setCodeSent(true)
-      setEmailMsg('验证码已发送，请查收邮箱')
-    } catch (e: any) {
-      setEmailMsg(`发送失败: ${e?.message || '未知错误'}`)
-    }
-  }
-
-  const handleVerify = async () => {
-    setEmailMsg('')
-    try {
-      const res = await verifyEmail(email, code)
-      if (!res.success) throw new Error(res.message || '验证失败')
-      setEmailMsg(res.data === true ? '邮箱绑定成功' : '验证码错误')
-      if (res.data === true) { setCode(''); setCodeSent(false) }
-    } catch (e: any) {
-      setEmailMsg(`验证失败: ${e?.message || '未知错误'}`)
-    }
-  }
-
   return (
-    <div className="flex-1 flex flex-col bg-surface">
+    <div className="flex-1 flex flex-col bg-surface min-h-0">
       <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
         <h1 className="text-sm font-semibold text-text-primary">系统设置</h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
         {/* RAG Config */}
         <section className="bg-panel border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
@@ -94,73 +80,108 @@ export default function SettingsView() {
           </p>
         </section>
 
-        {/* Email Binding */}
+        {/* Runtime Config */}
         <section className="bg-panel border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Mail className="w-4 h-4 text-accent" />
-            <h2 className="text-sm font-semibold">邮箱绑定（主动随访）</h2>
+          <div className="flex items-center gap-2 mb-1">
+            <SlidersHorizontal className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-semibold">系统配置（DB 覆盖 · 重启生效）</h2>
           </div>
-          <div className="flex gap-2">
-            <input
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="输入邮箱地址"
-              className="flex-1 px-3 py-2 rounded-lg border border-border bg-white
-                text-xs text-text-primary placeholder:text-muted focus:outline-none
-                focus:ring-2 focus:ring-accent/20 focus:border-accent"
-            />
-            <button onClick={handleSendCode}
-              className="px-3 py-2 rounded-lg bg-accent text-white text-xs hover:opacity-90
-                transition-opacity disabled:opacity-40"
-              disabled={!email.includes('@')}>
-              发送验证码
-            </button>
-          </div>
-          {codeSent && (
-            <div className="flex gap-2 mt-2">
-              <input
-                value={code}
-                onChange={e => setCode(e.target.value)}
-                placeholder="6 位验证码"
-                className="flex-1 px-3 py-2 rounded-lg border border-border bg-white
-                  text-xs text-text-primary placeholder:text-muted focus:outline-none
-                  focus:ring-2 focus:ring-accent/20 focus:border-accent"
-              />
-              <button onClick={handleVerify}
-                className="px-3 py-2 rounded-lg border border-accent text-accent text-xs
-                  hover:bg-accent/5 transition-colors">
-                确认绑定
-              </button>
-            </div>
-          )}
-          {emailMsg && <p className="text-xs text-muted mt-2">{emailMsg}</p>}
-          <p className="text-xs text-muted mt-2">
-            绑定邮箱后可接收 BayMD 主动健康随访提醒（邮件不含病情细节）
-          </p>
+          <p className="text-[11px] text-muted mb-2">表单化编辑模型供应商 / RAG 超参数，保存到数据库，重启后端后生效。留空字段保持 yaml 默认值。</p>
+          <AiConfigForm />
+          <RagConfigForm />
         </section>
 
         {/* Trace */}
         <section className="bg-panel border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <Activity className="w-4 h-4 text-accent" />
-            <h2 className="text-sm font-semibold">最近链路</h2>
+            <h2 className="text-sm font-semibold">链路追踪</h2>
           </div>
-          {traces.length > 0 ? (
-            <div className="space-y-2">
-              {traces.map((t: any) => (
-                <div key={t.traceId} className="flex items-center justify-between text-xs py-1 border-b border-border last:border-0">
-                  <span className="text-muted font-mono">{t.traceId?.slice(0, 8)}</span>
-                  <span className="text-muted">{t.totalDurationMs}ms</span>
-                  <span className={`${t.status === 'SUCCESS' ? 'text-accent' : 'text-vital'}`}>
-                    {t.status}
-                  </span>
-                </div>
-              ))}
-            </div>
+
+          {selectedTrace ? (
+            <TraceWaterfall detail={selectedTrace} onBack={() => setSelectedTrace(null)} />
           ) : (
-            <p className="text-xs text-muted">暂无链路数据</p>
+            <div className="space-y-1">
+              {traces.length > 0 ? (
+                traces.map((t: any) => (
+                  <button key={t.traceId} onClick={() => handleTraceClick(t.traceId)}
+                    className="w-full flex items-center justify-between text-xs py-1.5 px-2
+                      rounded-md border-b border-border last:border-0
+                      hover:bg-accent/5 transition-colors cursor-pointer">
+                    <span className="text-muted font-mono">{t.traceId?.slice(0, 8)}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-muted">{t.totalDurationMs}ms</span>
+                      <span className={`${t.status === 'SUCCESS' ? 'text-accent' : 'text-vital'}`}>{t.status}</span>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="text-xs text-muted">暂无链路数据</p>
+              )}
+            </div>
+          )}
+          {traceLoading && (
+            <div className="flex items-center gap-2 mt-3 text-xs text-muted">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> 加载链路详情...
+            </div>
           )}
         </section>
+      </div>
+    </div>
+  )
+}
+
+/** 链路瀑布图 — 用 trace 节点的父子层级 + 耗时渲染横向时间条 */
+function TraceWaterfall({ detail, onBack }: { detail: TraceDetail; onBack: () => void }) {
+  const { run, nodes } = detail
+  const maxDur = Math.max(run.durationMs || 0, ...nodes.map(n => n.durationMs || 0), 1)
+  const fmt = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${ms}ms`)
+
+  return (
+    <div>
+      {/* 头部 */}
+      <div className="flex items-center gap-2 mb-3">
+        <button onClick={onBack}
+          className="p-1 rounded-md text-muted hover:text-text-primary hover:bg-accent/5 transition-colors">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-mono text-muted">{run.traceId?.slice(0, 12)}</span>
+            <span className={`${run.status === 'SUCCESS' ? 'text-accent' : 'text-vital'} font-semibold`}>{run.status}</span>
+            <span className="text-muted">{fmt(run.durationMs || 0)}</span>
+          </div>
+          <div className="text-[10px] text-muted truncate">
+            {run.traceName || 'rag-stream-chat'} · {run.startTime ? new Date(run.startTime).toLocaleString() : ''}
+          </div>
+        </div>
+      </div>
+
+      {/* 瀑布图 */}
+      <div className="space-y-0.5 overflow-x-auto">
+        {nodes.map((n: TraceNode, i: number) => (
+          <TraceBar key={n.nodeId || i} node={n} maxDur={maxDur} fmt={fmt} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TraceBar({ node, maxDur, fmt }: { node: TraceNode; maxDur: number; fmt: (ms: number) => string }) {
+  const err = node.status !== 'SUCCESS'
+  const pct = Math.max((node.durationMs || 0) / maxDur * 100, 0.5)
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <div className="w-44 shrink-0 flex items-center justify-end gap-1.5"
+        style={{ paddingRight: node.depth * 10 }}>
+        <span className={`truncate ${err ? 'text-vital' : 'text-text-primary'}`} title={node.nodeName}>
+          {node.nodeName}
+        </span>
+        <span className="text-[10px] text-muted shrink-0">{fmt(node.durationMs || 0)}</span>
+      </div>
+      <div className="h-4 flex-1 bg-accent/5 rounded-sm relative">
+        <div className={`h-full rounded-sm ${err ? 'bg-vital' : 'bg-accent/70'}`}
+          style={{ width: `${pct}%` }} />
       </div>
     </div>
   )

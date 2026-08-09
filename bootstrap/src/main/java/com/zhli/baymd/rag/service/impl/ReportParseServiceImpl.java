@@ -13,6 +13,8 @@ import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
 import com.zhli.baymd.rag.config.ReportProperties;
 import com.zhli.baymd.rag.constant.RAGConstant;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import com.zhli.baymd.rag.dao.entity.MedicalReportDO;
 import com.zhli.baymd.rag.dao.mapper.MedicalReportMapper;
@@ -51,6 +53,7 @@ public class ReportParseServiceImpl implements ReportParseService {
     private final DocumentParserSelector documentParserSelector;
     private final LLMService llmService;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
     private final MedicalReportMapper medicalReportMapper;
     private final ReportProperties properties;
 
@@ -196,18 +199,21 @@ public class ReportParseServiceImpl implements ReportParseService {
             return null;
         }
         try {
-            String prompt = promptTemplateLoader.render(
-                    RAGConstant.REPORT_EXTRACT_PROMPT_PATH,
-                    Map.of("report_text", rawText));
-            ChatRequest request = ChatRequest.builder()
+            Map<String, String> slots = Map.of("report_text", rawText);
+            String prompt = promptConfigService.system(PromptScenes.REPORT_EXTRACT, () ->
+                    promptTemplateLoader.render(RAGConstant.REPORT_EXTRACT_PROMPT_PATH, slots), slots);
+            String user = promptConfigService.user(PromptScenes.REPORT_EXTRACT,
+                    () -> "请按规则输出 JSON 数组。", slots);
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                     .messages(List.of(
                             ChatMessage.system(prompt),
-                            ChatMessage.user("请按规则输出 JSON 数组。")
+                            ChatMessage.user(user)
                     ))
                     .temperature(0.1)
                     .topP(0.3)
-                    .thinking(false)
-                    .build();
+                    .thinking(false);
+            promptConfigService.applyParams(PromptScenes.REPORT_EXTRACT, rb);
+            ChatRequest request = rb.build();
             String raw = llmService.chat(request);
             String cleaned = LLMResponseCleaner.stripMarkdownCodeFence(raw);
             // 校验为合法 JSON（数组或对象均可），非法则降级为 null

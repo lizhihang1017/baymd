@@ -75,11 +75,18 @@ public class RoutingLLMService implements LLMService {
         if (!StringUtils.hasText(modelId)) {
             return chat(request);
         }
+        ModelTarget modelTarget;
+        try {
+            modelTarget = resolveTarget(modelId, Boolean.TRUE.equals(request.getThinking()));
+        } catch (RemoteException e) {
+            log.warn("指定模型 {} 不可用，回退默认路由: {}", modelId, e.getMessage());
+            return chat(request);
+        }
         return executor.executeWithFallback(
                 ModelCapability.CHAT,
-                List.of(resolveTarget(modelId, Boolean.TRUE.equals(request.getThinking()))),
+                List.of(modelTarget),
                 target -> clientsByProvider.get(target.candidate().getProvider()),
-                (client, target) -> client.chat(request, target)
+                (client, t) -> client.chat(request, t)
         );
     }
 

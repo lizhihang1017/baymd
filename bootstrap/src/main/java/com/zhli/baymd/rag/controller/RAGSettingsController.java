@@ -17,6 +17,7 @@
 
 package com.zhli.baymd.rag.controller;
 
+import com.zhli.baymd.framework.auth.RequireAdmin;
 import com.zhli.baymd.framework.convention.Result;
 import com.zhli.baymd.framework.web.Results;
 import com.zhli.baymd.infra.config.AIModelProperties;
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequiredArgsConstructor
+@RequireAdmin
 public class RAGSettingsController {
 
     private final RAGDefaultProperties ragDefaultProperties;

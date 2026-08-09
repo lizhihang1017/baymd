@@ -34,3 +34,10 @@ application-local.yml
 .mvn/wrapper/maven-wrapper.properties
 bootstrap/data/
 data/
+
+# ===== Stray / artifacts =====
+node_modules/
+mnt/
+
+# ===== Claude 个人配置 =====
+.claude/

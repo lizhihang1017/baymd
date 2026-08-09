@@ -23,6 +23,8 @@ import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.rag.config.MemoryProperties;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import com.zhli.baymd.rag.dao.entity.ConversationMessageDO;
 import com.zhli.baymd.rag.dao.entity.ConversationSummaryDO;
@@ -59,6 +61,7 @@ public class JdbcConversationMemorySummaryService implements ConversationMemoryS
     private final MemoryProperties memoryProperties;
     private final LLMService llmService;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
     private final RedissonClient redissonClient;
     private final Executor memorySummaryExecutor;
 
@@ -176,10 +179,9 @@ public class JdbcConversationMemorySummaryService implements ConversationMemoryS
 
         int summaryMaxChars = memoryProperties.getSummaryMaxChars();
         List<ChatMessage> summaryMessages = new ArrayList<>();
-        String summaryPrompt = promptTemplateLoader.render(
-                CONVERSATION_SUMMARY_PROMPT_PATH,
-                Map.of("summary_max_chars", String.valueOf(summaryMaxChars))
-        );
+        Map<String, String> summarySlots = Map.of("summary_max_chars", String.valueOf(summaryMaxChars));
+        String summaryPrompt = promptConfigService.system(PromptScenes.CONVERSATION_SUMMARY, () ->
+                promptTemplateLoader.render(CONVERSATION_SUMMARY_PROMPT_PATH, summarySlots), summarySlots);
         summaryMessages.add(ChatMessage.system(summaryPrompt));
 
         if (StrUtil.isNotBlank(existingSummary)) {
@@ -189,16 +191,18 @@ public class JdbcConversationMemorySummaryService implements ConversationMemoryS
             ));
         }
         summaryMessages.addAll(histories);
-        summaryMessages.add(ChatMessage.user(
-                "合并以上对话与历史摘要，去重后输出更新摘要。要求：严格≤" + summaryMaxChars + "字符；仅一行。"
-        ));
+        String userMsg = promptConfigService.user(PromptScenes.CONVERSATION_SUMMARY, () ->
+                "合并以上对话与历史摘要，去重后输出更新摘要。要求：严格≤" + summaryMaxChars + "字符；仅一行。",
+                summarySlots);
+        summaryMessages.add(ChatMessage.user(userMsg));
 
-        ChatRequest request = ChatRequest.builder()
+        ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                 .messages(summaryMessages)
                 .temperature(0.3D)
                 .topP(0.9D)
-                .thinking(false)
-                .build();
+                .thinking(false);
+        promptConfigService.applyParams(PromptScenes.CONVERSATION_SUMMARY, rb);
+        ChatRequest request = rb.build();
         try {
             String result = llmService.chat(request);
             log.info("对话摘要生成 - resultChars: {}", result.length());

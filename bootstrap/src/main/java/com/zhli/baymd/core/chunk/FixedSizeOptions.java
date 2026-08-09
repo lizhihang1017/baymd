@@ -17,6 +17,7 @@
 
 package com.zhli.baymd.core.chunk;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -24,14 +25,26 @@ import java.util.Map;
  *
  * @param chunkSize   目标块大小（字符数）
  * @param overlapSize 相邻块重叠大小（字符数）
+ * @param separator   自定义分隔符（可选）：提供时按分隔符切分后打包到 ≤ chunkSize；空则按固定大小+重叠切分
  */
 public record FixedSizeOptions(
         int chunkSize,
-        int overlapSize
+        int overlapSize,
+        String separator
 ) implements ChunkingOptions {
 
+    public FixedSizeOptions(int chunkSize, int overlapSize) {
+        this(chunkSize, overlapSize, null);
+    }
+
     @Override
-    public Map<String, Integer> toConfigMap() {
-        return Map.of("chunkSize", chunkSize, "overlapSize", overlapSize);
+    public Map<String, Object> toConfigMap() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("chunkSize", chunkSize);
+        map.put("overlapSize", overlapSize);
+        if (separator != null) {
+            map.put("separator", separator);
+        }
+        return map;
     }
 }

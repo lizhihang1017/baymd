@@ -17,6 +17,7 @@
 
 package com.zhli.baymd.admin.controller;
 
+import com.zhli.baymd.framework.auth.RequireAdmin;
 import com.zhli.baymd.admin.controller.vo.DashboardOverviewVO;
 import com.zhli.baymd.admin.controller.vo.DashboardPerformanceVO;
 import com.zhli.baymd.admin.controller.vo.DashboardTrendsVO;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/dashboard")
+@RequireAdmin
 public class DashboardController {
 
     private final DashboardService dashboardService;

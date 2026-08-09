@@ -7,6 +7,8 @@ import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
 import com.zhli.baymd.rag.constant.RAGConstant;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.core.prompt.PromptTemplateLoader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +30,7 @@ public class FollowUpPlanService {
 
     private final LLMService llmService;
     private final PromptTemplateLoader promptTemplateLoader;
+    private final PromptConfigService promptConfigService;
 
     public record FollowUpPlan(boolean shouldFollowUp, String followUpQuestion,
                                 int delayDays, String topic) {
@@ -38,19 +41,21 @@ public class FollowUpPlanService {
 
     public FollowUpPlan plan(String question, String answer) {
         try {
-            String prompt = promptTemplateLoader.render(
-                    RAGConstant.FOLLOWUP_PLAN_PROMPT_PATH,
-                    Map.of("question", question == null ? "" : question,
-                            "answer", answer == null ? "" : answer));
-            ChatRequest request = ChatRequest.builder()
+            Map<String, String> slots = Map.of("question", question == null ? "" : question,
+                    "answer", answer == null ? "" : answer);
+            String prompt = promptConfigService.system(PromptScenes.FOLLOWUP_PLAN, () ->
+                    promptTemplateLoader.render(RAGConstant.FOLLOWUP_PLAN_PROMPT_PATH, slots), slots);
+            String user = promptConfigService.user(PromptScenes.FOLLOWUP_PLAN, () -> "请按规则输出 JSON。", slots);
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                     .messages(List.of(
                             ChatMessage.system(prompt),
-                            ChatMessage.user("请按规则输出 JSON。")
+                            ChatMessage.user(user)
                     ))
                     .temperature(0.1)
                     .topP(0.3)
-                    .thinking(false)
-                    .build();
+                    .thinking(false);
+            promptConfigService.applyParams(PromptScenes.FOLLOWUP_PLAN, rb);
+            ChatRequest request = rb.build();
             String raw = llmService.chat(request);
             String cleaned = LLMResponseCleaner.stripMarkdownCodeFence(raw);
             JsonObject obj = JsonParser.parseString(cleaned).getAsJsonObject();

@@ -17,6 +17,9 @@
 
 package com.zhli.baymd.rag.core.retrieve;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import com.zhli.baymd.framework.convention.RetrievedChunk;
 import com.zhli.baymd.infra.embedding.EmbeddingService;
 import lombok.RequiredArgsConstructor;
@@ -51,12 +54,18 @@ public class PgRetrieverService implements RetrieverService {
 
         String vectorLiteral = toVectorLiteral(vector);
         // noinspection SqlDialectInspection,SqlNoDataSourceInspection
-        return jdbcTemplate.query("SELECT id, content, 1 - (embedding <=> ?::vector) AS score FROM t_knowledge_vector WHERE metadata->>'collection_name' = ? ORDER BY embedding <=> ?::vector LIMIT ?",
-                (rs, rowNum) -> RetrievedChunk.builder()
-                        .id(rs.getString("id"))
-                        .text(rs.getString("content"))
-                        .score(rs.getFloat("score"))
-                        .build(),
+        return jdbcTemplate.query("SELECT id, content, metadata, 1 - (embedding <=> ?::vector) AS score FROM t_knowledge_vector WHERE metadata->>'collection_name' = ? ORDER BY embedding <=> ?::vector LIMIT ?",
+                (rs, rowNum) -> {
+                    String content = rs.getString("content");
+                    // 父子切块：子块命中时附带父块上下文
+                    String parent = extractParentContent(rs.getString("metadata"));
+                    String text = parent != null ? parent + "\n\n" + content : content;
+                    return RetrievedChunk.builder()
+                            .id(rs.getString("id"))
+                            .text(text)
+                            .score(rs.getFloat("score"))
+                            .build();
+                },
                 vectorLiteral, request.getCollectionName(), vectorLiteral, request.getTopK()
         );
     }
@@ -90,5 +99,21 @@ public class PgRetrieverService implements RetrieverService {
             sb.append(embedding[i]);
         }
         return sb.append("]").toString();
+    }
+
+    /** 父子切块：从向量 metadata 提取父块全文（parent_content） */
+    private String extractParentContent(String metadataJson) {
+        if (metadataJson == null || metadataJson.isBlank()) {
+            return null;
+        }
+        try {
+            JsonObject obj = JsonParser.parseString(metadataJson).getAsJsonObject();
+            if (obj.has("parent_content")) {
+                return obj.get("parent_content").getAsString();
+            }
+        } catch (Exception e) {
+            // 忽略非法 JSON
+        }
+        return null;
     }
 }

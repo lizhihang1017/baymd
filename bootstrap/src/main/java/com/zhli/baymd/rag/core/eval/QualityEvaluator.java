@@ -6,13 +6,17 @@ import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -26,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 public class QualityEvaluator {
 
     private final LLMService llmService;
+    private final PromptConfigService promptConfigService;
     private static final Gson GSON = new Gson();
 
     private static final String JUDGE_PROMPT = """
@@ -63,10 +68,24 @@ public class QualityEvaluator {
             String refs = referencePoints != null && !referencePoints.isEmpty()
                     ? String.join("、", referencePoints) : "无";
 
-            String prompt = String.format(JUDGE_PROMPT, question, refs, answer);
-            ChatRequest req = ChatRequest.builder()
-                    .messages(List.of(ChatMessage.user(prompt)))
-                    .temperature(0.0).maxTokens(256).build();
+            Map<String, String> slots = Map.of(
+                    "question", question == null ? "" : question,
+                    "reference_points", refs == null ? "" : refs,
+                    "answer", answer == null ? "" : answer);
+            String prompt = promptConfigService.user(PromptScenes.QUALITY_EVALUATE,
+                    () -> String.format(JUDGE_PROMPT, question, refs, answer), slots);
+
+            List<ChatMessage> judgeMessages = new ArrayList<>();
+            if (promptConfigService.hasSystem(PromptScenes.QUALITY_EVALUATE)) {
+                judgeMessages.add(ChatMessage.system(promptConfigService.system(
+                        PromptScenes.QUALITY_EVALUATE, () -> "", slots)));
+            }
+            judgeMessages.add(ChatMessage.user(prompt));
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
+                    .messages(judgeMessages)
+                    .temperature(0.0).maxTokens(256);
+            promptConfigService.applyParams(PromptScenes.QUALITY_EVALUATE, rb);
+            ChatRequest req = rb.build();
 
             String raw = llmService.chat(req);
             String cleaned = LLMResponseCleaner.stripMarkdownCodeFence(raw);

@@ -72,15 +72,29 @@ public class AgentToolRegistry {
      * 根据名称获取工具
      */
     public Optional<AgentTool> getTool(String name) {
+        if (!ToolSwitchStore.isEnabled(name)) {
+            return Optional.empty();
+        }
         return Optional.ofNullable(tools.get(name));
     }
 
     /**
-     * 获取所有工具列表（不可变快照）
+     * 获取所有工具列表（不可变快照，按 ToolSwitchStore 过滤启用的工具）
      */
     public List<AgentTool> listTools() {
         synchronized (lock) {
-            return List.copyOf(new ArrayList<>(tools.values()));
+            return tools.values().stream()
+                    .filter(t -> ToolSwitchStore.isEnabled(t.getName()))
+                    .toList();
+        }
+    }
+
+    /**
+     * 获取全部工具（不过滤开关 — 供管理后台展示完整工具清单）
+     */
+    public List<AgentTool> listAllToolsUnfiltered() {
+        synchronized (lock) {
+            return new ArrayList<>(tools.values());
         }
     }
 
@@ -91,6 +105,7 @@ public class AgentToolRegistry {
         synchronized (lock) {
             return tools.values().stream()
                     .filter(t -> type.equals(t.getType()))
+                    .filter(t -> ToolSwitchStore.isEnabled(t.getName()))
                     .toList();
         }
     }
@@ -130,6 +145,9 @@ public class AgentToolRegistry {
 
             int idx = 1;
             for (AgentTool tool : tools.values()) {
+                if (!ToolSwitchStore.isEnabled(tool.getName())) {
+                    continue;
+                }
                 sb.append("### ").append(idx++).append(". ").append(tool.getName()).append("\n");
                 sb.append("- **描述**：").append(tool.getDescription()).append("\n");
                 sb.append("- **参数**：").append(formatSchema(tool.getParametersSchema())).append("\n\n");

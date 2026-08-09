@@ -7,6 +7,8 @@ import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.chat.StreamCallback;
 import com.zhli.baymd.infra.chat.StreamCancellationHandle;
 import com.zhli.baymd.rag.core.guardrails.GuardrailsFactory;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +57,7 @@ public class ReActLoop {
     private final ToolGuardrails toolGuardrails;
     private final int maxIterations;
     private final String systemPromptTemplate;
+    private final PromptConfigService promptConfigService;
 
     // ==================== 解析器 ====================
 
@@ -70,7 +73,8 @@ public class ReActLoop {
                      AgentToolRegistry toolRegistry,
                      GuardrailsFactory guardrailsFactory,
                      int maxIterations,
-                     String systemPromptTemplate) {
+                     String systemPromptTemplate,
+                     PromptConfigService promptConfigService) {
         this.llmService = llmService;
         this.toolRegistry = toolRegistry;
         this.guardrailsFactory = guardrailsFactory;
@@ -81,6 +85,7 @@ public class ReActLoop {
         this.systemPromptTemplate = systemPromptTemplate != null
                 ? systemPromptTemplate
                 : "你是一个医疗健康助手。请基于工具返回的信息回答用户问题。";
+        this.promptConfigService = promptConfigService;
     }
 
     // ==================== 核心执行 ====================
@@ -126,7 +131,12 @@ public class ReActLoop {
                 if (callback != null) {
                     callback.onThinking(String.format("[思考中... 第%d/%d轮]%n", iteration + 1, maxIterations));
                 }
-                llmResponse = llmService.chat(ChatRequest.builder().messages(messages).temperature(0.3).build());
+                ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
+                        .messages(messages).temperature(0.3);
+                if (promptConfigService != null) {
+                    promptConfigService.applyParams(PromptScenes.AGENT_MAIN, rb);
+                }
+                llmResponse = llmService.chat(rb.build());
             } catch (Exception e) {
                 log.error("[ReAct:{}] LLM 调用失败, iteration={}", runId, iteration, e);
                 return ReActResult.error(runId, steps, "LLM 调用失败: " + e.getMessage(),
@@ -306,10 +316,13 @@ public class ReActLoop {
         ));
 
         try {
-            String summary = llmService.chat(ChatRequest.builder()
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
                     .messages(messages)
-                    .temperature(0.3)
-                    .build());
+                    .temperature(0.3);
+            if (promptConfigService != null) {
+                promptConfigService.applyParams(PromptScenes.AGENT_MAIN, rb);
+            }
+            String summary = llmService.chat(rb.build());
             if (callback != null) {
                 callback.onContent(summary);
                 callback.onComplete();

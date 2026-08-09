@@ -17,6 +17,7 @@
 
 package com.zhli.baymd.knowledge.controller;
 
+import com.zhli.baymd.framework.auth.RequireAdmin;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zhli.baymd.core.chunk.ChunkingMode;
 import com.zhli.baymd.knowledge.controller.request.KnowledgeBaseCreateRequest;
@@ -45,6 +46,7 @@ import java.util.List;
  */
 @RestController
 @RequiredArgsConstructor
+@RequireAdmin
 public class KnowledgeBaseController {
 
     private final KnowledgeBaseService knowledgeBaseService;

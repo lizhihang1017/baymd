@@ -1,0 +1,131 @@
+package com.zhli.baymd.rag.core.prompt;
+
+import java.util.List;
+
+/**
+ * 场景化提示词配置目录 — 供管理后台渲染"每个 LLM 调用"的编辑表单。
+ * <p>每条记录描述一个可配置的 LLM 调用场景：中文名、说明、可用占位符槽位、
+ * 默认提示词来源（.st 模板路径或内联文本）与默认超参数。</p>
+ */
+public final class PromptSceneCatalog {
+
+    public record SceneMeta(String scene, String label, String description, List<String> slots,
+                            String defaultSystemTemplate, String defaultUserTemplate,
+                            String inlineSystem, String inlineUser,
+                            Double defaultTemperature, Integer defaultMaxTokens, Double defaultTopP) {
+    }
+
+    private static final List<SceneMeta> CATALOG = List.of(
+            new SceneMeta(PromptScenes.QUERY_REWRITE, "查询改写 + 多问句拆分",
+                    "把用户原始问题改写为更利于检索的表达，并拆分为多个子问题（快模型调用）",
+                    List.of("{question}", "{history}"),
+                    "prompt/user-question-rewrite.st", null, null, null,
+                    0.1, null, 0.3),
+            new SceneMeta(PromptScenes.INTENT_CLASSIFY, "意图分类",
+                    "将问题映射到意图树上的叶子节点并打分（快模型调用）",
+                    List.of("{intent_list}", "{question}"),
+                    "prompt/intent-classifier.st", null, null, null,
+                    0.1, null, 0.3),
+            new SceneMeta(PromptScenes.AMBIGUITY_CHECK, "歧义二次确认",
+                    "规则无法判断时由 LLM 确认问题是否存在品类歧义",
+                    List.of("{question}", "{candidates}"),
+                    null, "prompt/guidance-ambiguity-check.st", null, null,
+                    0.1, null, 0.3),
+            new SceneMeta(PromptScenes.RAG_ANSWER, "RAG 检索后回答",
+                    "基于知识库证据 + 用户问题生成最终回答（主力慢模型，流式）",
+                    List.of("{question}", "{sub_questions}", "{evidence}"),
+                    "prompt/answer-chat-medical-kb.st", null, null, null,
+                    0.0, null, 1.0),
+            new SceneMeta(PromptScenes.SYSTEM_ONLY, "系统直答（闲聊/系统意图）",
+                    "纯系统能力直接回复，不走检索管道",
+                    List.of("{question}"),
+                    "prompt/answer-chat-system.st", null, null, null,
+                    0.7, null, null),
+            new SceneMeta(PromptScenes.AGENT_MAIN, "ReAct Agent 主循环",
+                    "Agent 自主多步推理的基座系统提示词（工具列表由系统自动附加）",
+                    List.of("{question}"),
+                    "prompt/answer-chat-system.st", null, null, null,
+                    0.3, null, null),
+            new SceneMeta(PromptScenes.MCP_PARAM_EXTRACT, "MCP 工具参数提取",
+                    "从用户问题中提取 MCP 工具调用所需参数",
+                    List.of("{tool_definition}", "{user_question}"),
+                    "prompt/mcp-parameter-extract.st", "prompt/mcp-parameter-extract-user.st", null, null,
+                    0.1, null, 0.3),
+            new SceneMeta(PromptScenes.CONVERSATION_SUMMARY, "对话长时摘要",
+                    "对话超过阈值后压缩为长时摘要",
+                    List.of("{summary_max_chars}"),
+                    "prompt/conversation-summary.st", null, null, null,
+                    0.3, null, 0.9),
+            new SceneMeta(PromptScenes.CONVERSATION_TITLE, "会话标题生成",
+                    "为会话生成标题",
+                    List.of("{title_max_chars}", "{question}"),
+                    null, "prompt/conversation-title.st", null, null,
+                    0.7, null, 0.3),
+            new SceneMeta(PromptScenes.MEMORY_FACT, "用户事实抽取",
+                    "从对话中提取关于用户的原子事实（记忆）",
+                    List.of("{question}", "{answer}"),
+                    null, null,
+                    "基于以下对话，提取关于用户的事实信息。每条事实应简短、原子化、可独立理解。\n\n类型: health(健康)/behavior(行为)/preference(偏好)/goal(目标)\n置信度: 0.0~1.0, <0.5 不提取\n最多5条，无新信息返回空数组\n\n严格返回 JSON: {\"facts\":[{\"type\":\"health\",\"fact\":\"事实内容\",\"confidence\":0.9}]}",
+                    "用户问题: {question}\n系统回答: {answer}",
+                    0.1, 512, null),
+            new SceneMeta(PromptScenes.MEMORY_EPISODE, "对话情节抽取",
+                    "为对话生成情节摘要与标签（记忆）",
+                    List.of("{question}", "{answer}"),
+                    null, null,
+                    "基于以下对话，生成情节摘要。title<=15字, summary 1-2句, topics 2-5个关键词。\n严格返回 JSON: {\"title\":\"标题\",\"summary\":\"摘要\",\"topics\":[\"标签1\",\"标签2\"]}",
+                    "用户问题: {question}\n系统回答: {answer}",
+                    0.1, 256, null),
+            new SceneMeta(PromptScenes.MEMORY_FACT_MERGE, "事实合并去重",
+                    "同类型事实过多时 LLM 合并去重",
+                    List.of("{fact_list}"),
+                    null, null,
+                    "合并以下关于同一用户的事实（去重、解决矛盾、精炼表述）。\n返回 JSON: {\"merged\": \"合并后的事实\", \"confidence\": 0.85}\n若无需合并，返回空: {\"merged\": \"\", \"confidence\": 0}",
+                    "{fact_list}",
+                    0.1, 512, null),
+            new SceneMeta(PromptScenes.MEMORY_PROFILE, "用户画像生成",
+                    "事实积累足够后生成用户画像",
+                    List.of("{fact_list}"),
+                    null, null,
+                    "基于以下用户事实，生成用户画像摘要（200字以内）。\n包含: 健康状况、行为习惯、偏好倾向、目标诉求。\n返回 JSON: {\"profile\": \"画像摘要文本\"}",
+                    "{fact_list}",
+                    0.2, 512, null),
+            new SceneMeta(PromptScenes.REPORT_EXTRACT, "体检报告解析",
+                    "从报告文本中提取结构化指标",
+                    List.of("{report_text}"),
+                    "prompt/report-extract.st", null, null, null,
+                    0.1, null, 0.3),
+            new SceneMeta(PromptScenes.FOLLOWUP_PLAN, "主动随访规划",
+                    "LLM 判断本轮对话是否值得几天后随访",
+                    List.of("{question}", "{answer}"),
+                    "prompt/followup-plan.st", null, null, null,
+                    0.1, null, 0.3),
+            new SceneMeta(PromptScenes.FOLLOWUP_GENERATE, "推荐追问生成",
+                    "主回答后生成最多 3 个推荐追问",
+                    List.of("{question}"),
+                    null, null,
+                    "基于以下对话，生成最多3个用户可能感兴趣的追问。\n追问应简短（不超过20字）、与上下文相关、引导深入探索。\n严格返回 JSON 数组：[\"追问1\", \"追问2\", \"追问3\"]\n如果没有合适的追问，返回空数组 []。",
+                    "用户问题: {question}",
+                    0.3, 256, null),
+            new SceneMeta(PromptScenes.QUALITY_EVALUATE, "回答质量评估",
+                    "LLM-as-Judge 从 4 个维度给回答打分",
+                    List.of("{question}", "{reference_points}", "{answer}"),
+                    null, null,
+                    "你是 RAG 系统质量评审专家。基于以下参考要点，从4个维度给回答评分(1-5):\n\n【用户问题】: {question}\n【参考要点】: {reference_points}\n【系统回答】: {answer}\n\n严格返回 JSON：\n{\"accuracy\": <1-5, 回答与参考要点的匹配度>, \"completeness\": <1-5, 是否覆盖了所有参考要点>, \"faithfulness\": <1-5, 回答是否有编造内容(5=完全基于证据)>, \"conciseness\": <1-5, 是否简洁无冗余>}",
+                    null,
+                    0.0, 256, null),
+            new SceneMeta(PromptScenes.QA_CHUNK, "QA 切块（文档摄取）",
+                    "LLM 从文档提取问答对作为检索块",
+                    List.of("{doc}"),
+                    null, null,
+                    "# 角色\n你是医学文档问答对提取器。从给定的文档中提取独立的问答对。\n\n# 规则\n1. 只提取文档中明确存在、独立成对的问题与答案\n2. 每个问答对应自包含、可独立理解（不要引用\"如上/前文\"）\n3. 最多返回 20 对；无法提取时返回空数组 []\n4. 严格返回 JSON 数组，不要任何解释或 markdown 代码块：\n[{\"question\":\"问题\",\"answer\":\"答案\"}]\n\n# 文档\n{doc}",
+                    null,
+                    0.1, null, 0.3)
+    );
+
+    private PromptSceneCatalog() {
+    }
+
+    public static List<SceneMeta> catalog() {
+        return CATALOG;
+    }
+}

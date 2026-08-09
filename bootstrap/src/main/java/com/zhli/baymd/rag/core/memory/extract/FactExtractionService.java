@@ -8,6 +8,8 @@ import com.zhli.baymd.framework.convention.ChatMessage;
 import com.zhli.baymd.framework.convention.ChatRequest;
 import com.zhli.baymd.infra.chat.LLMService;
 import com.zhli.baymd.infra.util.LLMResponseCleaner;
+import com.zhli.baymd.rag.core.prompt.PromptConfigService;
+import com.zhli.baymd.rag.core.prompt.PromptScenes;
 import com.zhli.baymd.rag.dao.entity.UserFactDO;
 import com.zhli.baymd.rag.dao.mapper.UserFactMapper;
 import com.zhli.baymd.rag.dao.mapper.UserFactVectorMapper;
@@ -20,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 原子事实提取服务 — 从对话中提取关于用户的事实信息。
@@ -30,6 +33,7 @@ import java.util.List;
 public class FactExtractionService {
 
     private final LLMService llmService;
+    private final PromptConfigService promptConfigService;
     private final UserFactMapper factMapper;
     private final UserFactVectorMapper factVectorMapper;
     private static final Gson GSON = new Gson();
@@ -51,10 +55,16 @@ public class FactExtractionService {
                                             String userId, String messageId) {
         String raw;
         try {
-            raw = llmService.chat(ChatRequest.builder()
-                    .messages(List.of(ChatMessage.system(PROMPT),
-                            ChatMessage.user("用户问题: " + question + "\n系统回答: " + answer)))
-                    .temperature(0.1).maxTokens(512).build());
+            Map<String, String> slots = Map.of("question", StrUtil.nullToEmpty(question),
+                    "answer", StrUtil.nullToEmpty(answer));
+            String system = promptConfigService.system(PromptScenes.MEMORY_FACT, () -> PROMPT, slots);
+            String user = promptConfigService.user(PromptScenes.MEMORY_FACT, () ->
+                    "用户问题: " + question + "\n系统回答: " + answer, slots);
+            ChatRequest.ChatRequestBuilder rb = ChatRequest.builder()
+                    .messages(List.of(ChatMessage.system(system), ChatMessage.user(user)))
+                    .temperature(0.1).maxTokens(512);
+            promptConfigService.applyParams(PromptScenes.MEMORY_FACT, rb);
+            raw = llmService.chat(rb.build());
         } catch (Exception e) {
             log.warn("Fact 提取 LLM 调用失败", e);
             return List.of();

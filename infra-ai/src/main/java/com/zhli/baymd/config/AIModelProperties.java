@@ -58,7 +58,7 @@ public class AIModelProperties {
 
     /**
      * 模型组配置类
-     * 包含默认模型、深度思考模型以及候选模型列表
+     * 包含默认模型、深度思考模型、快速模型以及候选模型列表
      */
     @Data
     public static class ModelGroup {
@@ -71,6 +71,12 @@ public class AIModelProperties {
          * 深度思考模型标识
          */
         private String deepThinkingModel;
+
+        /**
+         * 快速模型标识 — 用于改写/意图分类等工具性调用（快慢分层），
+         * 最终回答仍用 {@link #defaultModel}。可为空（空则工具调用走默认路由）。
+         */
+        private String fastModel;
 
         /**
          * 候选模型列表

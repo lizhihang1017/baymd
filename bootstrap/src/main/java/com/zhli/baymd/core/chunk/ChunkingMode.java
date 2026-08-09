@@ -41,14 +41,16 @@ public enum ChunkingMode {
         public ChunkingOptions createOptions(Map<String, Object> config) {
             return new FixedSizeOptions(
                     toInt(config, "chunkSize", 512),
-                    toInt(config, "overlapSize", 128));
+                    toInt(config, "overlapSize", 128),
+                    toString(config, "separator", null));
         }
 
         @Override
         public ChunkingOptions createDefaultOptions(Integer targetSize, Integer overlapSize) {
             return new FixedSizeOptions(
                     targetSize != null ? targetSize : 512,
-                    overlapSize != null ? overlapSize : 128);
+                    overlapSize != null ? overlapSize : 128,
+                    null);
         }
     },
 
@@ -73,6 +75,42 @@ public enum ChunkingMode {
                     1800,
                     600);
         }
+    },
+
+    /**
+     * 父子切块 - 大父块承载上下文，小子块精确检索，检索子块时附带父块
+     */
+    PARENT_CHILD("parent_child", "父子切块", true) {
+        @Override
+        public ChunkingOptions createOptions(Map<String, Object> config) {
+            return new ParentChildOptions(
+                    toInt(config, "parentMaxChars", 1400),
+                    toInt(config, "childMaxChars", 500),
+                    toString(config, "separator", null));
+        }
+
+        @Override
+        public ChunkingOptions createDefaultOptions(Integer targetSize, Integer overlapSize) {
+            return new ParentChildOptions(
+                    targetSize != null ? targetSize : 1400,
+                    overlapSize != null ? overlapSize : 500,
+                    null);
+        }
+    },
+
+    /**
+     * 问答切块 - LLM 从文档提取问答对，每个问答对作为一个块
+     */
+    QA("qa", "问答切块", true) {
+        @Override
+        public ChunkingOptions createOptions(Map<String, Object> config) {
+            return new QaOptions(toString(config, "prompt", null));
+        }
+
+        @Override
+        public ChunkingOptions createDefaultOptions(Integer targetSize, Integer overlapSize) {
+            return new QaOptions();
+        }
     };
 
     private final String value;
@@ -89,7 +127,7 @@ public enum ChunkingMode {
      * 获取该模式的默认配置参数（用于 API 返回和配置校验）
      * 从 createOptions 派生，默认值只维护一份
      */
-    public Map<String, Integer> getDefaultConfig() {
+    public Map<String, Object> getDefaultConfig() {
         return createOptions(Map.of()).toConfigMap();
     }
 
@@ -123,6 +161,14 @@ public enum ChunkingMode {
             }
         }
         return defaultValue;
+    }
+
+    static String toString(Map<String, Object> config, String key, String defaultValue) {
+        if (config == null) return defaultValue;
+        Object value = config.get(key);
+        if (value == null) return defaultValue;
+        // 不 trim：分隔符可能本身就是空白字符（如 "\n\n" 段落分隔符）
+        return String.valueOf(value);
     }
 
     @JsonCreator
