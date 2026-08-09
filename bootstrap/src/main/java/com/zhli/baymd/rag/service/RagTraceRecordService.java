@@ -31,7 +31,16 @@ public interface RagTraceRecordService {
 
     void finishRun(String traceId, String status, String errorMessage, Date endTime, long durationMs);
 
+    void finishRun(String traceId, String status, String errorMessage, Date endTime, long durationMs, String extraData);
+
     void startNode(RagTraceNodeDO node);
 
     void finishNode(String traceId, String nodeId, String status, String errorMessage, Date endTime, long durationMs);
+
+    void finishNode(String traceId, String nodeId, String status, String errorMessage, Date endTime, long durationMs, String extraData);
+
+    /**
+     * 追加 run 的 extraData（以 JSON 对象合并,如流式完成后补写 answer）
+     */
+    void appendRunExtraData(String traceId, String extraDataJson);
 }

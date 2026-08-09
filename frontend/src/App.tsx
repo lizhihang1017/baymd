@@ -36,7 +36,7 @@ function App() {
       window.location.href = '/'
       return null
     }
-    return <AdminPage onExit={() => { window.location.href = '/' }} />
+    return <AdminPage />
   }
 
   // ===== 用户端（/）=====

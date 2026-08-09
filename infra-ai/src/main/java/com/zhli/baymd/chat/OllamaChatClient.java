@@ -30,6 +30,7 @@ public class OllamaChatClient extends AbstractOpenAIStyleChatClient {
     }
 
     @Override
+    @com.zhli.baymd.framework.trace.RagTraceNode(name = "OllamaChatClient-stream", type = "LLM_PROVIDER")
     public StreamCancellationHandle streamChat(ChatRequest request, StreamCallback callback, ModelTarget target) {
         return doStreamChat(request, callback, target);
     }

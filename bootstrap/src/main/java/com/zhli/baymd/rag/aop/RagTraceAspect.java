@@ -154,7 +154,8 @@ public class RagTraceAspect {
                     STATUS_SUCCESS,
                     null,
                     new Date(),
-                    System.currentTimeMillis() - startMillis
+                    System.currentTimeMillis() - startMillis,
+                    buildNodeExtraData(traceNode, joinPoint, result)
             );
             return result;
         } catch (Throwable ex) {
@@ -169,6 +170,54 @@ public class RagTraceAspect {
             throw ex;
         } finally {
             RagTraceContext.popNode();
+        }
+    }
+
+    /**
+     * 为 LLM 调用节点记录完整输入（prompt messages）与输出，序列化为 JSON 存入 extra_data。
+     * <p>适用于任何首参为 {@link ChatRequest} 的节点（LLM_PROVIDER 实际调用点优先，
+     * 如 bailian-chat;LLM_ROUTING 路由层作为兜底）。</p>
+     */
+    private String buildNodeExtraData(RagTraceNode traceNode, ProceedingJoinPoint joinPoint, Object result) {
+        String type = StrUtil.blankToDefault(traceNode.type(), "METHOD");
+        boolean isLlmNode = "LLM_ROUTING".equals(type) || "LLM_PROVIDER".equals(type);
+        if (!isLlmNode) {
+            return null;
+        }
+        // 同一 LLM 调用会被 routing + provider 两层注解各记录一次,这里只在 provider(实际调用点)记录,
+        // 避免重复;无 provider 时回退 routing
+        if ("LLM_ROUTING".equals(type) && joinPoint.getArgs() != null && joinPoint.getArgs().length > 0
+                && joinPoint.getArgs()[0] instanceof com.zhli.baymd.framework.convention.ChatRequest) {
+            // 检查是否有同链路的 LLM_PROVIDER 子节点已记录(routing 是外层,provider 是内层)
+            // 内层 provider 节点会先执行完,其 extraData 已写入;此处无法轻易判断,简单策略:
+            // routing 层不记录输入输出,交由 provider 层记录
+            return null;
+        }
+        try {
+            java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            Object[] args = joinPoint.getArgs();
+            if (args != null && args.length > 0 && args[0] instanceof com.zhli.baymd.framework.convention.ChatRequest req) {
+                // 完整输入消息列表（system/user/assistant 角色 + 内容）
+                java.util.List<java.util.Map<String, String>> messages = new java.util.ArrayList<>();
+                if (req.getMessages() != null) {
+                    for (com.zhli.baymd.framework.convention.ChatMessage m : req.getMessages()) {
+                        java.util.Map<String, String> entry = new java.util.LinkedHashMap<>();
+                        entry.put("role", m.getRole() == null ? "unknown" : m.getRole().name().toLowerCase());
+                        entry.put("content", m.getContent() == null ? "" : m.getContent());
+                        messages.add(entry);
+                    }
+                }
+                payload.put("input", messages);
+                payload.put("temperature", req.getTemperature());
+                payload.put("maxTokens", req.getMaxTokens());
+                payload.put("topP", req.getTopP());
+                payload.put("thinking", req.getThinking());
+            }
+            payload.put("output", result == null ? "" : String.valueOf(result));
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload);
+        } catch (Exception e) {
+            log.warn("记录 LLM trace 输入输出失败: {}", e.getMessage());
+            return null;
         }
     }
 

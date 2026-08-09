@@ -72,4 +72,46 @@ public class AdminOpsController {
                 """.formatted(Math.max(1, Math.min(hours, 168)));
         return Results.success(jdbcTemplate.queryForList(sql));
     }
+
+    /** LLM 调用统计：次数 / 平均耗时 / 失败数 / 错误率趋势（来自 trace 数据） */
+    @GetMapping("/admin/ops/llm-stats")
+    public Result<Map<String, Object>> llmStats(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "24") int hours) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        int window = Math.max(1, Math.min(hours, 168));
+
+        // 总览: LLM 调用次数 / 平均耗时 / 失败数(按 LLM 相关节点)
+        Map<String, Object> total = jdbcTemplate.queryForMap("""
+                SELECT COUNT(*) AS calls,
+                       COALESCE(AVG(duration_ms), 0)::bigint AS avg_duration_ms,
+                       COALESCE(SUM(CASE WHEN status <> 'SUCCESS' THEN 1 ELSE 0 END), 0) AS failed
+                FROM t_rag_trace_node
+                WHERE node_type IN ('LLM_ROUTING','LLM_PROVIDER','LLM_TTFT')
+                  AND start_time > NOW() - INTERVAL '%d hours'
+                """.formatted(window));
+        r.put("total", total);
+
+        // 按小时错误率趋势
+        java.util.List<Map<String, Object>> hourly = jdbcTemplate.queryForList("""
+                SELECT to_char(date_trunc('hour', start_time), 'MM-DD HH24:00') AS time,
+                       COUNT(*) AS calls,
+                       COALESCE(SUM(CASE WHEN status <> 'SUCCESS' THEN 1 ELSE 0 END), 0) AS failed
+                FROM t_rag_trace_node
+                WHERE node_type IN ('LLM_ROUTING','LLM_PROVIDER','LLM_TTFT')
+                  AND start_time > NOW() - INTERVAL '%d hours'
+                GROUP BY 1 ORDER BY 1
+                """.formatted(window));
+        r.put("hourly", hourly);
+
+        // 最近 10 条问答的平均耗时/成功率
+        Map<String, Object> recent = jdbcTemplate.queryForMap("""
+                SELECT COUNT(*) AS runs,
+                       COALESCE(AVG(duration_ms), 0)::bigint AS avg_duration_ms,
+                       COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END), 0) AS success
+                FROM t_rag_trace_run
+                WHERE start_time > NOW() - INTERVAL '%d hours'
+                """.formatted(window));
+        r.put("recent", recent);
+        return Results.success(r);
+    }
 }

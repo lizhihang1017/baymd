@@ -60,6 +60,9 @@ public class StreamChatTraceRunner {
 
         String traceId = IdUtil.getSnowflakeNextIdStr();
         long startMillis = System.currentTimeMillis();
+        // 记录 traceId 供 wrapCallback 使用（onComplete 补写 answer 时定位 run）
+        CURRENT_TRACE_ID.set(traceId);
+
         traceRecordService.startRun(RagTraceRunDO.builder()
                 .traceId(traceId)
                 .traceName(TRACE_NAME)
@@ -69,7 +72,8 @@ public class StreamChatTraceRunner {
                 .userId(UserContext.getUserId())
                 .status(STATUS_RUNNING)
                 .startTime(new Date())
-                .extraData(StrUtil.format("{\"questionLength\":{}}", StrUtil.length(question)))
+                .extraData(StrUtil.format("{\"question\":{}}",
+                        escapeJson(StrUtil.maxLength(question, 2000))))
                 .build());
 
         RagTraceContext.setTraceId(traceId);
@@ -95,7 +99,78 @@ public class StreamChatTraceRunner {
             callback.onError(ex);
         } finally {
             RagTraceContext.clear();
+            CURRENT_TRACE_ID.remove();
         }
+    }
+
+    /** 当前正在执行的 traceId（供 {@link #wrapCallback} 使用）— TTL 透传到异步回调线程 */
+    private static final com.alibaba.ttl.TransmittableThreadLocal<String> CURRENT_TRACE_ID =
+            new com.alibaba.ttl.TransmittableThreadLocal<>();
+
+    /**
+     * 包装流式回调：收集最终回答,在 onComplete 时补写到 run.extra_data。
+     * <p>必须在 {@link #run} 之后、业务逻辑执行前调用,且返回的包装回调需传给 ctx。</p>
+     */
+    public StreamCallback wrapCallback(StreamCallback callback) {
+        StringBuilder answerBuffer = new StringBuilder();
+        return new StreamCallback() {
+            @Override
+            public void onThinking(String content) {
+                callback.onThinking(content);
+            }
+
+            @Override
+            public void onContent(String content) {
+                answerBuffer.append(content);
+                callback.onContent(content);
+            }
+
+            @Override
+            public void onComplete() {
+                try {
+                    String traceId = CURRENT_TRACE_ID.get();
+                    if (traceId != null) {
+                        traceRecordService.appendRunExtraData(traceId,
+                                StrUtil.format("{\"answer\":{}}",
+                                        escapeJson(StrUtil.maxLength(answerBuffer.toString(), 20000))));
+                    }
+                } catch (Exception e) {
+                    log.warn("补写 trace answer 失败: {}", e.getMessage());
+                }
+                callback.onComplete();
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                callback.onError(error);
+            }
+        };
+    }
+
+    /** JSON 字符串转义（引号/反斜杠/换行/控制字符） */
+    private static String escapeJson(String s) {
+        if (s == null) {
+            return "\"\"";
+        }
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.append("\"").toString();
     }
 
     private void runWithoutTrace(String conversationId,

@@ -35,15 +35,18 @@ import com.zhli.baymd.user.dao.mapper.UserMapper;
 import com.zhli.baymd.user.enums.UserRole;
 import com.zhli.baymd.user.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserServiceImpl implements UserService {
 
     private static final String DEFAULT_ADMIN_USERNAME = "admin";
 
     private final UserMapper userMapper;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Override
     public IPage<UserVO> pageQuery(UserPageRequest requestParam) {
@@ -127,6 +130,14 @@ public class UserServiceImpl implements UserService {
         UserDO record = loadById(id);
         ensureNotDefaultAdmin(record);
         userMapper.deleteById(record.getId());
+        // 级联删除该用户的记忆（事实/情节及其向量）
+        try {
+            jdbcTemplate.update("DELETE FROM t_user_fact WHERE user_id = ?", id);
+            jdbcTemplate.update("DELETE FROM t_user_episode WHERE user_id = ?", id);
+            log.info("删除用户关联记忆: userId={}", id);
+        } catch (Exception e) {
+            log.warn("删除用户记忆失败(不影响用户删除): userId={}", id, e);
+        }
     }
 
     @Override

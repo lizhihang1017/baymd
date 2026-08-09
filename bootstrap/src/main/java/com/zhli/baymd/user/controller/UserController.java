@@ -17,8 +17,8 @@
 
 package com.zhli.baymd.user.controller;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.zhli.baymd.framework.auth.RequireAdmin;
 import com.zhli.baymd.user.controller.request.ChangePasswordRequest;
 import com.zhli.baymd.user.controller.request.UserCreateRequest;
 import com.zhli.baymd.user.controller.request.UserPageRequest;
@@ -90,27 +90,27 @@ public class UserController {
     /**
      * 分页查询用户列表
      */
+    @RequireAdmin
     @GetMapping("/users")
     public Result<IPage<UserVO>> pageQuery(UserPageRequest requestParam) {
-        StpUtil.checkRole("admin");
         return Results.success(userService.pageQuery(requestParam));
     }
 
     /**
      * 创建用户
      */
+    @RequireAdmin
     @PostMapping("/users")
     public Result<String> create(@RequestBody UserCreateRequest requestParam) {
-        StpUtil.checkRole("admin");
         return Results.success(userService.create(requestParam));
     }
 
     /**
      * 更新用户
      */
+    @RequireAdmin
     @PutMapping("/users/{id}")
     public Result<Void> update(@PathVariable String id, @RequestBody UserUpdateRequest requestParam) {
-        StpUtil.checkRole("admin");
         userService.update(id, requestParam);
         return Results.success();
     }
@@ -118,9 +118,9 @@ public class UserController {
     /**
      * 删除用户
      */
+    @RequireAdmin
     @DeleteMapping("/users/{id}")
     public Result<Void> delete(@PathVariable String id) {
-        StpUtil.checkRole("admin");
         userService.delete(id);
         return Results.success();
     }

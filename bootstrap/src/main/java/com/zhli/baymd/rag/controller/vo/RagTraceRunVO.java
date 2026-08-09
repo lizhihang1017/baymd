@@ -52,4 +52,7 @@ public class RagTraceRunVO {
     private Date startTime;
 
     private Date endTime;
+
+    /** 用户问题 / 最终回答等扩展数据（JSON 字符串） */
+    private String extraData;
 }

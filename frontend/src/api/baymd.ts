@@ -41,6 +41,33 @@ export interface CurrentUser {
   avatar?: string;
 }
 
+// ===== 用户管理 (admin) =====
+
+export async function listUsers(page = 1, size = 100) {
+  const res = await fetch(`${BASE}/users?page=${page}&size=${size}`);
+  const json = await res.json();
+  return json.data?.records ?? [];
+}
+
+export async function createUser(data: { username: string; password: string; role: string; avatar?: string }) {
+  const res = await fetch(`${BASE}/users`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function updateUser(id: string, data: { username?: string; password?: string; role?: string; avatar?: string }) {
+  const res = await fetch(`${BASE}/users/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function deleteUser(id: string) {
+  const res = await fetch(`${BASE}/users/${id}`, { method: 'DELETE' });
+  return res.json();
+}
+
 export async function getCurrentUser(): Promise<CurrentUser> {
   const res = await fetch(`${BASE}/user/me`);
   const json = await res.json();
@@ -237,6 +264,51 @@ export async function getSettings() {
   return res.json();
 }
 
+// ===== 意图树 (admin) =====
+
+export interface IntentTreeNode {
+  id: string;
+  intentCode: string;
+  name: string;
+  level: number;          // 1=DOMAIN 2=CATEGORY 3=TOPIC
+  parentCode?: string | null;
+  description?: string;
+  examples?: string;
+  collectionName?: string;
+  topK?: number;
+  kind?: number;          // 0=KB 1=SYSTEM 2=MCP
+  sortOrder?: number;
+  enabled?: number;
+  mcpToolId?: string;
+  promptSnippet?: string;
+  children?: IntentTreeNode[];
+}
+
+export async function getIntentTree(): Promise<IntentTreeNode[]> {
+  const res = await fetch(`${BASE}/intent-tree/trees`);
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function createIntentNode(data: Record<string, any>) {
+  const res = await fetch(`${BASE}/intent-tree`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function updateIntentNode(id: string, data: Record<string, any>) {
+  const res = await fetch(`${BASE}/intent-tree/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function deleteIntentNode(id: string) {
+  const res = await fetch(`${BASE}/intent-tree/${id}`, { method: 'DELETE' });
+  return res.json();
+}
+
 // ===== Trace =====
 
 export async function getTraces(page: number = 1, size: number = 10) {
@@ -270,6 +342,64 @@ export interface ToolItem {
   description: string;
   enabled: boolean;
   type: string;
+}
+
+// ===== 用户记忆 CRUD (admin) =====
+
+export async function getMemoryUsers() {
+  const res = await fetch(`${BASE}/admin/memory/users`);
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function getMemoryFacts(userId: string) {
+  const res = await fetch(`${BASE}/admin/memory/facts?userId=${encodeURIComponent(userId)}`);
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function getMemoryEpisodes(userId: string) {
+  const res = await fetch(`${BASE}/admin/memory/episodes?userId=${encodeURIComponent(userId)}`);
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function createMemoryFact(data: { userId: string; factType: string; factText: string; confidence?: number }) {
+  const res = await fetch(`${BASE}/admin/memory/fact`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function updateMemoryFact(id: string, data: { factType?: string; factText?: string; confidence?: number }) {
+  const res = await fetch(`${BASE}/admin/memory/fact/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function deleteMemoryFact(id: string) {
+  const res = await fetch(`${BASE}/admin/memory/fact/${id}`, { method: 'DELETE' });
+  return res.json();
+}
+
+export async function createMemoryEpisode(data: { userId: string; title: string; summary: string; topics: string[] }) {
+  const res = await fetch(`${BASE}/admin/memory/episode`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function updateMemoryEpisode(id: string, data: { title?: string; summary?: string; topics?: string[] }) {
+  const res = await fetch(`${BASE}/admin/memory/episode/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function deleteMemoryEpisode(id: string) {
+  const res = await fetch(`${BASE}/admin/memory/episode/${id}`, { method: 'DELETE' });
+  return res.json();
 }
 
 export async function getTools(): Promise<ToolItem[]> {
@@ -365,6 +495,7 @@ export interface TraceNode {
   durationMs: number;
   startTime?: string;
   errorMessage?: string | null;
+  extraData?: string | null;
 }
 
 export interface TraceDetail {
@@ -375,8 +506,19 @@ export interface TraceDetail {
     startTime?: string;
     errorMessage?: string | null;
     traceName?: string;
+    extraData?: string | null;
   };
   nodes: TraceNode[];
+}
+
+/** LLM 调用输入输出详情（extraData 解析后） */
+export interface LlmCallDetail {
+  input?: { role: string; content: string }[];
+  output?: string;
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  thinking?: boolean;
 }
 
 export async function getTraceDetail(traceId: string): Promise<TraceDetail> {

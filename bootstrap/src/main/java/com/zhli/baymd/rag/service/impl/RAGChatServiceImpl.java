@@ -52,7 +52,10 @@ public class RAGChatServiceImpl implements RAGChatService {
                            String reportId, SseEmitter emitter) {
         String actualConversationId = StrUtil.isBlank(conversationId) ? IdUtil.getSnowflakeNextIdStr() : conversationId;
         String taskId = IdUtil.getSnowflakeNextIdStr();
-        StreamCallback callback = callbackFactory.createChatEventHandler(emitter, actualConversationId, taskId);
+        StreamCallback eventCallback = callbackFactory.createChatEventHandler(emitter, actualConversationId, taskId);
+
+        // 包装回调用于 trace 收集最终回答（onComplete 时补写 run.extra_data）
+        StreamCallback callback = traceRunner.wrapCallback(eventCallback);
 
         StreamChatContext ctx = StreamChatContext.builder()
                 .question(question)

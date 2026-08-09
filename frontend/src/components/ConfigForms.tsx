@@ -159,21 +159,97 @@ export function RagConfigForm() {
 // ===================== AI / 模型配置表单 =====================
 
 interface ProviderRow { name: string; url: string; apiKey: string }
-interface CandidateRow { id: string; provider: string; model: string; priority: number; supportsThinking: boolean }
+interface CandidateRow { id: string; provider: string; model: string; priority: number; supportsThinking: boolean; dimension?: number }
+interface ModelGroupRow { defaultModel: string; fastModel?: string; deepThinkingModel?: string; candidates: CandidateRow[] }
 interface AiForm {
   providers: ProviderRow[]
-  defaultModel: string
-  deepThinkingModel: string
-  fastModel: string
-  candidates: CandidateRow[]
+  chat: ModelGroupRow
+  embedding: ModelGroupRow
+  rerank: ModelGroupRow
 }
 
 const AI_DEFAULT: AiForm = {
   providers: [{ name: 'bailian', url: '', apiKey: '' }],
-  defaultModel: 'qwen3.7-plus',
-  deepThinkingModel: 'qwen3.7-plus',
-  fastModel: 'qwen-plus-2025-07-28',
-  candidates: [{ id: 'qwen3.7-plus', provider: 'bailian', model: 'qwen3.7-plus', priority: 1, supportsThinking: true }],
+  chat: {
+    defaultModel: 'qwen3.7-plus',
+    candidates: [{ id: 'qwen3.7-plus', provider: 'bailian', model: 'qwen3.7-plus', priority: 1, supportsThinking: true }],
+  },
+  embedding: {
+    defaultModel: 'text-embedding-v4',
+    candidates: [{ id: 'text-embedding-v4', provider: 'bailian', model: 'text-embedding-v4', priority: 1 }],
+  },
+  rerank: {
+    defaultModel: 'qwen3-rerank',
+    candidates: [{ id: 'qwen3-rerank', provider: 'bailian', model: 'qwen3-rerank', priority: 1 }],
+  },
+}
+
+/** 模型组编辑区块 — 默认模型 + 候选列表（chat 可选快模型/思考开关,embedding 可选维度） */
+function ModelGroupSection({ title, desc, group, onChange, showFast, showThinking, showDimension }: {
+  title: string
+  desc: string
+  group: ModelGroupRow
+  onChange: (g: ModelGroupRow) => void
+  showFast?: boolean
+  showThinking?: boolean
+  showDimension?: boolean
+}) {
+  const setGroup = (patch: Partial<ModelGroupRow>) => onChange({ ...group, ...patch })
+  const setCand = (i: number, patch: Partial<CandidateRow>) => {
+    const a = [...group.candidates]; a[i] = { ...a[i], ...patch }; onChange({ ...group, candidates: a })
+  }
+  const addCand = () => onChange({ ...group, candidates: [...group.candidates,
+    { id: '', provider: 'bailian', model: '', priority: 1, supportsThinking: false }] })
+  const delCand = (i: number) => onChange({ ...group, candidates: group.candidates.filter((_, k) => k !== i) })
+
+  return (
+    <div className="pt-3 mt-1 border-t border-border/60 first:border-t-0 first:pt-1">
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="text-xs font-semibold">{title}</span>
+        <span className="text-[10px] text-muted">{desc}</span>
+      </div>
+      <Field label="默认模型">
+        <Txt value={group.defaultModel} onChange={v => setGroup({ defaultModel: v })} placeholder="如 qwen3.7-plus" />
+      </Field>
+      {showFast && (
+        <Field label="快速模型（改写/意图）">
+          <Txt value={group.fastModel ?? ''} onChange={v => setGroup({ fastModel: v })} placeholder="如 qwen-plus-2025-07-28" />
+        </Field>
+      )}
+      {showThinking && (
+        <Field label="深度思考模型">
+          <Txt value={group.deepThinkingModel ?? ''} onChange={v => setGroup({ deepThinkingModel: v })} placeholder="如 qwen3.7-plus" />
+        </Field>
+      )}
+
+      <div className="flex items-center justify-between mt-1.5 mb-0.5">
+        <span className="text-[11px] text-muted">候选模型</span>
+        <button onClick={addCand} className="text-[11px] text-accent hover:underline flex items-center gap-0.5">
+          <Plus className="w-3 h-3" /> 添加
+        </button>
+      </div>
+      {group.candidates.map((cd, i) => (
+        <div key={i} className="flex items-center gap-1.5 py-1">
+          <Txt value={cd.id} placeholder="id" onChange={v => setCand(i, { id: v })} />
+          <Txt value={cd.provider} placeholder="provider" onChange={v => setCand(i, { provider: v })} />
+          <Txt value={cd.model} placeholder="model" onChange={v => setCand(i, { model: v })} />
+          {showDimension && (
+            <Txt value={cd.dimension ? String(cd.dimension) : ''} placeholder="dim" onChange={v => setCand(i, { dimension: v ? Number(v) : undefined })} />
+          )}
+          <Num value={cd.priority} onChange={v => setCand(i, { priority: v })} />
+          {showThinking && (
+            <button onClick={() => setCand(i, { supportsThinking: !cd.supportsThinking })}
+              className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${cd.supportsThinking ? 'bg-accent/10 text-accent' : 'bg-surface border border-border text-muted'}`}>
+              思考
+            </button>
+          )}
+          <button onClick={() => delCand(i)} className="text-muted hover:text-vital shrink-0">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function AiConfigForm() {
@@ -189,12 +265,25 @@ export function AiConfigForm() {
         const providers = Object.entries(p.providers || {}).map(([name, v]: any) => ({
           name, url: v.url || '', apiKey: v.apiKey || ''
         }))
+        const loadGroup = (g: any, def: ModelGroupRow): ModelGroupRow => ({
+          defaultModel: g?.defaultModel ?? def.defaultModel,
+          fastModel: g?.fastModel ?? def.fastModel,
+          deepThinkingModel: g?.deepThinkingModel ?? def.deepThinkingModel,
+          candidates: (g?.candidates?.length ? g.candidates : def.candidates).map((c: any) => ({
+            id: c.id, provider: c.provider || '', model: c.model || '',
+            priority: c.priority ?? 1, supportsThinking: !!c.supportsThinking, dimension: c.dimension,
+          })),
+        })
+        // 兼容旧版扁平结构（chat 字段曾在顶层）: 若 p.chat 缺失,用顶层字段兜底
+        const chatDef: ModelGroupRow = p.chat ? p.chat : {
+          defaultModel: p.defaultModel, fastModel: p.fastModel,
+          deepThinkingModel: p.deepThinkingModel, candidates: p.candidates,
+        }
         setCfg({
           providers: providers.length ? providers : AI_DEFAULT.providers,
-          defaultModel: p.chat?.defaultModel ?? AI_DEFAULT.defaultModel,
-          deepThinkingModel: p.chat?.deepThinkingModel ?? AI_DEFAULT.deepThinkingModel,
-          fastModel: p.chat?.fastModel ?? AI_DEFAULT.fastModel,
-          candidates: p.chat?.candidates || AI_DEFAULT.candidates,
+          chat: loadGroup(chatDef, AI_DEFAULT.chat),
+          embedding: loadGroup(p.embedding, AI_DEFAULT.embedding),
+          rerank: loadGroup(p.rerank, AI_DEFAULT.rerank),
         })
         setMsg('已加载数据库配置')
       } else setMsg('数据库暂无 ai 配置，显示默认值')
@@ -208,14 +297,18 @@ export function AiConfigForm() {
       cfg.providers.forEach(p => {
         if (p.name) providers[p.name] = { url: p.url || undefined, apiKey: p.apiKey || undefined }
       })
+      const buildGroup = (g: ModelGroupRow) => ({
+        defaultModel: g.defaultModel || undefined,
+        candidates: g.candidates.filter(c => c.id),
+      })
       const payload = {
         providers,
         chat: {
-          defaultModel: cfg.defaultModel || undefined,
-          deepThinkingModel: cfg.deepThinkingModel || undefined,
-          fastModel: cfg.fastModel || undefined,
-          candidates: cfg.candidates.filter(c => c.id),
+          ...buildGroup(cfg.chat),
+          fastModel: cfg.chat.fastModel || undefined,
         },
+        embedding: buildGroup(cfg.embedding),
+        rerank: buildGroup(cfg.rerank),
       }
       const res = await saveConfig('ai', JSON.stringify(payload))
       if (!res.success) throw new Error(res.message || '保存失败')
@@ -253,49 +346,20 @@ export function AiConfigForm() {
         ))}
       </div>
 
-      {/* 默认模型 */}
-      <div className="pt-1">
-        <Field label="默认模型">
-          <Txt value={cfg.defaultModel} onChange={v => setCfg(c => ({ ...c, defaultModel: v }))} placeholder="如 qwen3.7-plus" />
-        </Field>
-        <Field label="深度思考模型">
-          <Txt value={cfg.deepThinkingModel} onChange={v => setCfg(c => ({ ...c, deepThinkingModel: v }))} placeholder="如 qwen3.7-plus" />
-        </Field>
-        <Field label="快速模型（改写/意图）">
-          <Txt value={cfg.fastModel} onChange={v => setCfg(c => ({ ...c, fastModel: v }))} placeholder="如 qwen-plus-2025-07-28" />
-        </Field>
-      </div>
+      {/* Chat 模型组 */}
+      <ModelGroupSection title="对话模型（chat）" desc="问答主力 / 深度思考 / 快模型（改写·意图）"
+        group={cfg.chat} showFast showThinking
+        onChange={g => setCfg(c => ({ ...c, chat: g }))} />
 
-      {/* 候选模型 */}
-      <div className="py-1.5">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-muted">模型候选</span>
-          <button onClick={() => setCfg(c => ({ ...c, candidates: [...c.candidates, { id: '', provider: 'bailian', model: '', priority: 1, supportsThinking: false }] }))}
-            className="text-[11px] text-accent hover:underline flex items-center gap-0.5">
-            <Plus className="w-3 h-3" /> 添加
-          </button>
-        </div>
-        {cfg.candidates.map((cd, i) => (
-          <div key={i} className="flex items-center gap-1.5 py-1">
-            <Txt value={cd.id} placeholder="id" onChange={v => setCfg(c => {
-              const a = [...c.candidates]; a[i] = { ...a[i], id: v }; return { ...c, candidates: a }
-            })} />
-            <Txt value={cd.provider} placeholder="provider" onChange={v => setCfg(c => {
-              const a = [...c.candidates]; a[i] = { ...a[i], provider: v }; return { ...c, candidates: a }
-            })} />
-            <Txt value={cd.model} placeholder="model" onChange={v => setCfg(c => {
-              const a = [...c.candidates]; a[i] = { ...a[i], model: v }; return { ...c, candidates: a }
-            })} />
-            <Num value={cd.priority} onChange={v => setCfg(c => {
-              const a = [...c.candidates]; a[i] = { ...a[i], priority: v }; return { ...c, candidates: a }
-            })} />
-            <button onClick={() => setCfg(c => ({ ...c, candidates: c.candidates.filter((_, k) => k !== i) }))}
-              className="text-muted hover:text-vital shrink-0">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
+      {/* Embedding 模型组 */}
+      <ModelGroupSection title="嵌入模型（embedding）" desc="文档 / 记忆向量化,维度需与库表一致（1024）"
+        group={cfg.embedding} showDimension
+        onChange={g => setCfg(c => ({ ...c, embedding: g }))} />
+
+      {/* Rerank 模型组 */}
+      <ModelGroupSection title="重排模型（rerank）" desc="检索结果精排;候选含 rerank-noop 时自动降级（仅 RRF 融合）"
+        group={cfg.rerank}
+        onChange={g => setCfg(c => ({ ...c, rerank: g }))} />
     </FormShell>
   )
 }

@@ -54,4 +54,7 @@ public class RagTraceNodeVO {
     private Date startTime;
 
     private Date endTime;
+
+    /** LLM 调用详情等扩展数据（JSON 字符串） */
+    private String extraData;
 }
