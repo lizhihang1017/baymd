@@ -1,6 +1,6 @@
-# BayMD — AI 健康管家
+# BayMD — 健康管家
 
-> 基于 ReAct Agent + 渐进式记忆系统的医学健康智能问答平台,**越用越聪明**。
+> 基于 ReAct Agent + 渐进式记忆系统的医学健康智能问答平台。
 
 [![CI](https://github.com/zhli103/baymd/actions/workflows/ci.yml/badge.svg)](https://github.com/zhli103/baymd/actions/workflows/ci.yml)
 
@@ -109,7 +109,7 @@ Agent: 思考 → search_knowledge_base("头疼") → 观察结果
      → 综合分析 → 最终回答
 ```
 
-### 🧠 渐进式记忆系统(借鉴 EverOS)
+### 🧠 渐进式记忆系统
 三级记忆架构,越用越了解用户:
 
 | 层级 | 策略 | 说明 |
