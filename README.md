@@ -6,7 +6,7 @@
 
 ## 🎬 演示视频
 
-[▶ 点击观看 BayMD 功能演示(B 站)](https://www.bilibili.com/video/BV1yJu16bEpV)
+[▶ 点击观看 BayMD 功能演示(B 站)](https://www.bilibili.com/video/BV1X4uZ6GEwQ)
 
 ## 📸 界面预览
 
