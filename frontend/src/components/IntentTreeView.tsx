@@ -113,9 +113,9 @@ export default function IntentTreeView() {
 
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-0">
-      <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
-        <h1 className="text-sm font-semibold text-text-primary">意图树</h1>
-        <span className="ml-3 text-[11px] text-muted">RAG 路由规则 · DOMAIN → CATEGORY → TOPIC · 增删改即时生效</span>
+      <header className="h-16 border-b border-border flex items-center px-6 shrink-0 bg-white/70 backdrop-blur-md border-b border-border/70">
+        <div className="w-1 h-6 rounded-full bg-accent mr-3" />
+        <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">意图树</h1>
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto p-5">
         <div className="max-w-3xl">
@@ -138,7 +138,7 @@ export default function IntentTreeView() {
           ) : tree.length === 0 ? (
             <p className="text-xs text-muted">意图树为空,点击「新增领域」创建</p>
           ) : (
-            <div className="bg-panel border border-border rounded-xl p-3">
+            <div className="bg-white border border-border/70 rounded-xl shadow-sm p-3">
               {tree.map(n => renderNode(n, 0))}
             </div>
           )}

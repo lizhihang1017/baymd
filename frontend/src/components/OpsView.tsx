@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { authHeaders } from '../api/baymd'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Users, MessageSquare, Activity, RefreshCw, Cpu } from 'lucide-react'
 
 interface Ops {
@@ -21,9 +22,9 @@ export default function OpsView() {
   const load = useCallback(async () => {
     try {
       const [o, t, l] = await Promise.all([
-        fetch('/api/baymd/admin/ops/overview').then(r => r.json()),
-        fetch('/api/baymd/admin/ops/trends?hours=24').then(r => r.json()),
-        fetch('/api/baymd/admin/ops/llm-stats?hours=24').then(r => r.json()),
+        fetch('/api/baymd/admin/ops/overview', { headers: authHeaders() }).then(r => r.json()),
+        fetch('/api/baymd/admin/ops/trends?hours=24', { headers: authHeaders() }).then(r => r.json()),
+        fetch('/api/baymd/admin/ops/llm-stats?hours=24', { headers: authHeaders() }).then(r => r.json()),
       ])
       setOps(o.data || null)
       setTrends((t.data || []).map((x: any) => ({ time: x.time, messages: Number(x.messages) || 0, chars: Number(x.chars) || 0 })))
@@ -39,6 +40,39 @@ export default function OpsView() {
   }, [load])
 
   const fmt = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}w` : n.toLocaleString()
+
+/** 数字滚动动画 — 值变化时从旧值渐变到新值 */
+function CountUp({ value, duration = 600 }: { value: string; duration?: number }) {
+  const [display, setDisplay] = useState(value)
+  const prevRef = useRef(value)
+
+  useEffect(() => {
+    const from = prevRef.current
+    const to = value
+    prevRef.current = to
+    // 非纯数字(含单位/百分比)直接显示
+    const fromNum = parseFloat(from.replace(/[^0-9.]/g, ''))
+    const toNum = parseFloat(to.replace(/[^0-9.]/g, ''))
+    if (isNaN(fromNum) || isNaN(toNum) || fromNum === toNum) {
+      setDisplay(to)
+      return
+    }
+    const suffix = to.replace(/[0-9.,]/g, '')
+    const start = performance.now()
+    let raf: number
+    const tick = (now: number) => {
+      const p = Math.min((now - start) / duration, 1)
+      const eased = 1 - Math.pow(1 - p, 3) // easeOutCubic
+      const val = fromNum + (toNum - fromNum) * eased
+      setDisplay(Math.round(val).toLocaleString() + suffix)
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value, duration])
+
+  return <>{display}</>
+}
 
   const cards: { label: string; value: string; icon: any; color: string }[] = ops ? [
     { label: '在线用户（5分钟）', value: fmt(ops.onlineUsers), icon: Users, color: 'text-accent' },
@@ -60,8 +94,11 @@ export default function OpsView() {
 
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-0">
-      <header className="h-12 border-b border-border flex items-center justify-between px-4 shrink-0">
-        <h1 className="text-sm font-semibold text-text-primary">运营看板</h1>
+      <header className="h-16 border-b border-border flex items-center justify-between px-6 shrink-0 bg-white/70 backdrop-blur-md border-b border-border/70">
+        <div className="flex items-center">
+          <div className="w-1 h-6 rounded-full bg-accent mr-3" />
+          <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">运营看板</h1>
+        </div>
         <div className="flex items-center gap-2 text-[11px] text-muted">
           {updatedAt && <span>更新于 {updatedAt}</span>}
           <button onClick={load} className="flex items-center gap-1 hover:text-accent transition-colors">
@@ -74,12 +111,12 @@ export default function OpsView() {
         {/* KPI 卡片 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {(cards || []).map((c, i) => (
-            <div key={i} className="bg-panel border border-border rounded-xl p-4">
+            <div key={i} className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
               <div className="flex items-center gap-1.5 mb-2">
                 <c.icon className={`w-4 h-4 ${c.color}`} />
                 <span className="text-[11px] text-muted">{c.label}</span>
               </div>
-              <div className="text-2xl font-semibold text-text-primary">{c.value}</div>
+              <div className="text-2xl font-semibold text-text-primary"><CountUp value={c.value} /></div>
             </div>
           ))}
         </div>
@@ -89,19 +126,19 @@ export default function OpsView() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {(llmCards || []).map((c, i) => (
-                <div key={i} className="bg-panel border border-border rounded-xl p-4">
+                <div key={i} className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
                   <div className="flex items-center gap-1.5 mb-2">
                     <c.icon className={`w-4 h-4 ${c.color}`} />
                     <span className="text-[11px] text-muted">{c.label}</span>
                   </div>
-                  <div className="text-2xl font-semibold text-text-primary">{c.value}</div>
+                  <div className="text-2xl font-semibold text-text-primary"><CountUp value={c.value} /></div>
                 </div>
               ))}
             </div>
 
             {/* LLM 调用量 + 错误率趋势 */}
             {llm.hourly.length >= 2 && (
-              <div className="bg-panel border border-border rounded-xl p-4">
+              <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift">
                 <div className="flex items-center gap-1.5 mb-3">
                   <Cpu className="w-4 h-4 text-accent" />
                   <h2 className="text-sm font-semibold">LLM 调用趋势（近 24 小时）</h2>
@@ -113,7 +150,7 @@ export default function OpsView() {
         )}
 
         {/* 消息趋势折线图（近 24h） */}
-        <div className="bg-panel border border-border rounded-xl p-4">
+        <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift">
           <div className="flex items-center gap-1.5 mb-3">
             <Activity className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-semibold">消息趋势（近 24 小时）</h2>
@@ -147,24 +184,24 @@ function TrendChart({ data }: { data: TrendPoint[] }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[480px]" role="img" aria-label="消息数趋势">
         <defs>
           <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#5C3D4E" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#5C3D4E" stopOpacity="0" />
+            <stop offset="0%" stopColor="#0891B2" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#0891B2" stopOpacity="0" />
           </linearGradient>
         </defs>
         {[0.25, 0.5, 0.75, 1].map(p => (
           <line key={p} x1={PAD} x2={W - PAD} y1={H - PAD - p * (H - PAD * 2)} y2={H - PAD - p * (H - PAD * 2)}
-            stroke="#E8E6E3" strokeWidth="1" />
+            stroke="#CFFAFE" strokeWidth="1" />
         ))}
         <polygon points={area} fill="url(#trendFill)" />
-        <polyline points={pts} fill="none" stroke="#5C3D4E" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={pts} fill="none" stroke="#0891B2" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         {data.map((d, i) => (
           <g key={i}>
-            <circle cx={x(i)} cy={y(d.messages)} r="2.5" fill="#5C3D4E" />
+            <circle cx={x(i)} cy={y(d.messages)} r="2.5" fill="#0891B2" />
             <title>{`${d.time}: ${d.messages} 条消息`}</title>
           </g>
         ))}
-        <text x={PAD} y={H - 6} fontSize="9" fill="#8899A6">{data[0].time}</text>
-        <text x={W - PAD} y={H - 6} fontSize="9" fill="#8899A6" textAnchor="end">{data[data.length - 1].time}</text>
+        <text x={PAD} y={H - 6} fontSize="9" fill="#64748B">{data[0].time}</text>
+        <text x={W - PAD} y={H - 6} fontSize="9" fill="#64748B" textAnchor="end">{data[data.length - 1].time}</text>
       </svg>
     </div>
   )
@@ -188,19 +225,19 @@ function LlmTrendChart({ data }: { data: { time: string; calls: number; failed: 
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[480px]" role="img" aria-label="LLM 调用趋势">
         {[0.25, 0.5, 0.75, 1].map(p => (
           <line key={p} x1={PAD} x2={W - PAD} y1={H - PAD - p * (H - PAD * 2)} y2={H - PAD - p * (H - PAD * 2)}
-            stroke="#E8E6E3" strokeWidth="1" />
+            stroke="#CFFAFE" strokeWidth="1" />
         ))}
         {/* 调用量柱状 */}
         {data.map((d, i) => (
           <g key={i}>
             <rect x={x(i) - barW / 2} y={yCalls(d.calls)} width={barW} height={Math.max(H - PAD - yCalls(d.calls), 1)}
-              fill="#5C3D4E" opacity="0.75" rx="1">
+              fill="#0891B2" opacity="0.75" rx="1">
               <title>{`${d.time}: ${d.calls} 次调用`}</title>
             </rect>
           </g>
         ))}
         {/* 错误率折线 */}
-        <polyline points={errPts} fill="none" stroke="#C0392B" strokeWidth="1.5" strokeLinejoin="round" />
+        <polyline points={errPts} fill="none" stroke="#DC2626" strokeWidth="1.5" strokeLinejoin="round" />
         {data.map((d, i) => {
           const rate = d.calls > 0 ? d.failed / d.calls * 100 : 0
           return (
@@ -210,10 +247,10 @@ function LlmTrendChart({ data }: { data: { time: string; calls: number; failed: 
             </g>
           )
         })}
-        <text x={PAD} y={H - 6} fontSize="9" fill="#8899A6">{data[0].time}</text>
-        <text x={W - PAD} y={H - 6} fontSize="9" fill="#8899A6" textAnchor="end">{data[data.length - 1].time}</text>
+        <text x={PAD} y={H - 6} fontSize="9" fill="#64748B">{data[0].time}</text>
+        <text x={W - PAD} y={H - 6} fontSize="9" fill="#64748B" textAnchor="end">{data[data.length - 1].time}</text>
         {/* 图例 */}
-        <text x={W - 140} y={14} fontSize="9" fill="#5C3D4E">■ 调用量</text>
+        <text x={W - 140} y={14} fontSize="9" fill="#0891B2">■ 调用量</text>
         <text x={W - 70} y={14} fontSize="9" fill="#C0392B">— 错误率%</text>
       </svg>
     </div>

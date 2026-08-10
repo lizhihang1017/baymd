@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+# ===== BayMD 前端镜像(多阶段构建) =====
+# 构建: node 20 编译 React 静态产物
+# 运行: nginx 静态托管 + /api 反向代理(SSE 支持)
+
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend ./
+RUN npm run build
+
+# ===== 运行阶段 =====
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80

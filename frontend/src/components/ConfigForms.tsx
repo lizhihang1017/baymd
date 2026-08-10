@@ -4,10 +4,13 @@ import { getConfig, saveConfig } from '../api/baymd'
 
 // ===================== 通用表单控件 =====================
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, dot }: { label: string; children: React.ReactNode; dot?: string }) {
   return (
-    <label className="flex items-center justify-between gap-3 py-1.5 text-xs border-b border-border/60 last:border-0">
-      <span className="text-muted shrink-0">{label}</span>
+    <label className="flex items-center justify-between gap-3 py-2 text-xs border-b border-border/50 last:border-0 group/field">
+      <span className="flex items-center gap-2 text-muted shrink-0 group-hover/field:text-text-primary transition-colors">
+        {dot && <span className="w-1.5 h-1.5 rounded-full" style={{ background: dot }} />}
+        {label}
+      </span>
       {children}
     </label>
   )
@@ -17,8 +20,9 @@ function Num({ value, onChange, step = 1 }: { value: number; onChange: (v: numbe
   return (
     <input type="number" step={step} value={value}
       onChange={e => onChange(Number(e.target.value))}
-      className="w-24 px-2 py-1 rounded-md border border-border bg-white text-xs text-right
-        focus:outline-none focus:border-accent" />
+      className="w-24 px-2.5 py-1.5 rounded-lg border border-border bg-white text-xs text-right tabular-nums
+        focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-shadow
+        hover:border-accent/50" />
   )
 }
 
@@ -26,18 +30,33 @@ function Txt({ value, onChange, placeholder }: { value: string; onChange: (v: st
   return (
     <input type="text" value={value} placeholder={placeholder}
       onChange={e => onChange(e.target.value)}
-      className="flex-1 min-w-0 px-2 py-1 rounded-md border border-border bg-white text-xs
-        focus:outline-none focus:border-accent" />
+      className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-border bg-white text-xs
+        focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-shadow
+        hover:border-accent/50" />
   )
 }
 
 function Sel({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: [string, string][] }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
-      className="w-28 px-2 py-1 rounded-md border border-border bg-white text-xs
-        focus:outline-none focus:border-accent">
+      className="w-28 px-2.5 py-1.5 rounded-lg border border-border bg-white text-xs
+        focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-shadow
+        hover:border-accent/50">
       {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
     </select>
+  )
+}
+
+/** 配置分组块 — 模块色点 + 标题 + 浅色背景 */
+function GroupBlock({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg bg-gradient-to-r from-white to-accent/5 border border-border/50 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-accent/5 border-b border-border/40">
+        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+        <span className="text-[11px] font-semibold text-text-primary">{title}</span>
+      </div>
+      <div className="px-3 py-1">{children}</div>
+    </div>
   )
 }
 
@@ -46,27 +65,31 @@ function FormShell({ title, desc, children, onSave, onLoad, msg }: {
   onSave: () => void; onLoad: () => void; msg: string
 }) {
   return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-semibold">{title}</span>
-        <div className="flex gap-1.5">
+    <div className="mt-4 bg-white rounded-xl border border-border/70 shadow-sm overflow-hidden">
+      {/* 头部 */}
+      <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-accent/5 to-transparent border-b border-border/50">
+        <div>
+          <span className="text-xs font-semibold text-text-primary">{title}</span>
+          <p className="text-[10px] text-muted mt-0.5">{desc}</p>
+        </div>
+        <div className="flex gap-2">
           <button onClick={onLoad} title="从数据库加载当前配置"
-            className="px-2 py-1 rounded-md border border-border text-xs text-muted
-              hover:text-accent hover:border-accent/40 transition-colors flex items-center gap-1">
+            className="px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted
+              hover:text-accent hover:border-accent/40 transition-colors flex items-center gap-1 bg-white/60">
             <RefreshCw className="w-3 h-3" /> 加载
           </button>
           <button onClick={onSave} title="保存到数据库，重启生效"
-            className="px-2 py-1 rounded-md bg-accent text-white text-xs hover:opacity-90
-              transition-opacity flex items-center gap-1">
+            className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs hover:bg-accent-dark
+              transition-colors flex items-center gap-1 shadow-sm">
             <Save className="w-3 h-3" /> 保存
           </button>
         </div>
       </div>
-      <p className="text-[11px] text-muted mb-1">{desc}</p>
-      <div className="bg-white rounded-lg border border-border px-3 py-1">
+      {/* 内容 */}
+      <div className="px-4 py-2">
         {children}
       </div>
-      {msg && <p className="text-[11px] text-muted mt-1">{msg}</p>}
+      {msg && <p className="px-4 pb-2 text-[11px] text-accent">{msg}</p>}
     </div>
   )
 }
@@ -115,43 +138,64 @@ export function RagConfigForm() {
   }
 
   return (
-    <FormShell title="RAG 超参数" desc="查询改写 / 记忆 / 检索 / ReAct" onSave={save} onLoad={load} msg={msg}>
-      <Field label="查询改写">
-        <Sel value={String(cfg.queryRewrite.enabled)} onChange={v => set(c => ({ ...c, queryRewrite: { enabled: v === 'true' } }))}
-          options={[['true', '开启'], ['false', '关闭']]} />
-      </Field>
-      <Field label="记忆策略">
-        <Sel value={cfg.memory.strategy} onChange={v => set(c => ({ ...c, memory: { ...c.memory, strategy: v } }))}
-          options={MEMORY_STRATEGIES} />
-      </Field>
-      <Field label="历史保留轮数">
-        <Num value={cfg.memory.historyKeepTurns} onChange={v => set(c => ({ ...c, memory: { ...c.memory, historyKeepTurns: v } }))} />
-      </Field>
-      <Field label="摘要开始轮数">
-        <Num value={cfg.memory.summaryStartTurns} onChange={v => set(c => ({ ...c, memory: { ...c.memory, summaryStartTurns: v } }))} />
-      </Field>
-      <Field label="摘要压缩">
-        <Sel value={String(cfg.memory.summaryEnabled)} onChange={v => set(c => ({ ...c, memory: { ...c.memory, summaryEnabled: v === 'true' } }))}
-          options={[['true', '开启'], ['false', '关闭']]} />
-      </Field>
-      <Field label="检索默认 TopK">
-        <Num value={cfg.search.defaultTopK} onChange={v => set(c => ({ ...c, search: { ...c.search, defaultTopK: v } }))} />
-      </Field>
-      <Field label="全局置信度阈值">
-        <Num value={cfg.search.vectorGlobalConfidenceThreshold} step={0.05}
-          onChange={v => set(c => ({ ...c, search: { ...c.search, vectorGlobalConfidenceThreshold: v } }))} />
-      </Field>
-      <Field label="意图定向最低分">
-        <Num value={cfg.search.intentDirectedMinIntentScore} step={0.05}
-          onChange={v => set(c => ({ ...c, search: { ...c.search, intentDirectedMinIntentScore: v } }))} />
-      </Field>
-      <Field label="ReAct 模式">
-        <Sel value={String(cfg.react.enabled)} onChange={v => set(c => ({ ...c, react: { ...c.react, enabled: v === 'true' } }))}
-          options={[['true', '开启'], ['false', '关闭']]} />
-      </Field>
-      <Field label="ReAct 最大迭代">
-        <Num value={cfg.react.maxIterations} onChange={v => set(c => ({ ...c, react: { ...c.react, maxIterations: v } }))} />
-      </Field>
+    <FormShell title="RAG 超参数" desc="查询改写 / 记忆 / 检索 / ReAct 的运行时配置" onSave={save} onLoad={load} msg={msg}>
+      <div className="space-y-3 py-1">
+        {/* 查询改写 */}
+        <GroupBlock title="查询改写" color="#0891B2">
+          <Field label="启用查询改写" dot="#0891B2">
+            <Sel value={String(cfg.queryRewrite.enabled)} onChange={v => set(c => ({ ...c, queryRewrite: { enabled: v === 'true' } }))}
+              options={[['true', '开启'], ['false', '关闭']]} />
+          </Field>
+        </GroupBlock>
+
+        {/* 记忆 */}
+        <GroupBlock title="对话记忆" color="#059669">
+          <Field label="记忆策略" dot="#059669">
+            <Sel value={cfg.memory.strategy} onChange={v => set(c => ({ ...c, memory: { ...c.memory, strategy: v } }))}
+              options={MEMORY_STRATEGIES} />
+          </Field>
+          <div className="grid grid-cols-2 gap-x-6">
+            <Field label="历史保留轮数" dot="#059669">
+              <Num value={cfg.memory.historyKeepTurns} onChange={v => set(c => ({ ...c, memory: { ...c.memory, historyKeepTurns: v } }))} />
+            </Field>
+            <Field label="摘要开始轮数" dot="#059669">
+              <Num value={cfg.memory.summaryStartTurns} onChange={v => set(c => ({ ...c, memory: { ...c.memory, summaryStartTurns: v } }))} />
+            </Field>
+          </div>
+          <Field label="摘要压缩" dot="#059669">
+            <Sel value={String(cfg.memory.summaryEnabled)} onChange={v => set(c => ({ ...c, memory: { ...c.memory, summaryEnabled: v === 'true' } }))}
+              options={[['true', '开启'], ['false', '关闭']]} />
+          </Field>
+        </GroupBlock>
+
+        {/* 检索 */}
+        <GroupBlock title="混合检索" color="#7C3AED">
+          <div className="grid grid-cols-3 gap-x-4">
+            <Field label="默认 TopK" dot="#7C3AED">
+              <Num value={cfg.search.defaultTopK} onChange={v => set(c => ({ ...c, search: { ...c.search, defaultTopK: v } }))} />
+            </Field>
+            <Field label="全局置信度" dot="#7C3AED">
+              <Num value={cfg.search.vectorGlobalConfidenceThreshold} step={0.05}
+                onChange={v => set(c => ({ ...c, search: { ...c.search, vectorGlobalConfidenceThreshold: v } }))} />
+            </Field>
+            <Field label="意图定向最低分" dot="#7C3AED">
+              <Num value={cfg.search.intentDirectedMinIntentScore} step={0.05}
+                onChange={v => set(c => ({ ...c, search: { ...c.search, intentDirectedMinIntentScore: v } }))} />
+            </Field>
+          </div>
+        </GroupBlock>
+
+        {/* ReAct */}
+        <GroupBlock title="ReAct Agent" color="#D97706">
+          <Field label="启用 ReAct" dot="#D97706">
+            <Sel value={String(cfg.react.enabled)} onChange={v => set(c => ({ ...c, react: { ...c.react, enabled: v === 'true' } }))}
+              options={[['true', '开启'], ['false', '关闭']]} />
+          </Field>
+          <Field label="最大迭代次数" dot="#D97706">
+            <Num value={cfg.react.maxIterations} onChange={v => set(c => ({ ...c, react: { ...c.react, maxIterations: v } }))} />
+          </Field>
+        </GroupBlock>
+      </div>
     </FormShell>
   )
 }
@@ -185,7 +229,7 @@ const AI_DEFAULT: AiForm = {
 }
 
 /** 模型组编辑区块 — 默认模型 + 候选列表（chat 可选快模型/思考开关,embedding 可选维度） */
-function ModelGroupSection({ title, desc, group, onChange, showFast, showThinking, showDimension }: {
+function ModelGroupSection({ title, desc, group, onChange, showFast, showThinking, showDimension, color }: {
   title: string
   desc: string
   group: ModelGroupRow
@@ -193,6 +237,7 @@ function ModelGroupSection({ title, desc, group, onChange, showFast, showThinkin
   showFast?: boolean
   showThinking?: boolean
   showDimension?: boolean
+  color?: string
 }) {
   const setGroup = (patch: Partial<ModelGroupRow>) => onChange({ ...group, ...patch })
   const setCand = (i: number, patch: Partial<CandidateRow>) => {
@@ -205,7 +250,10 @@ function ModelGroupSection({ title, desc, group, onChange, showFast, showThinkin
   return (
     <div className="pt-3 mt-1 border-t border-border/60 first:border-t-0 first:pt-1">
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-xs font-semibold">{title}</span>
+        <span className="flex items-center gap-1.5 text-xs font-semibold">
+          {color && <span className="w-2 h-2 rounded-full" style={{ background: color }} />}
+          {title}
+        </span>
         <span className="text-[10px] text-muted">{desc}</span>
       </div>
       <Field label="默认模型">
@@ -318,48 +366,50 @@ export function AiConfigForm() {
 
   return (
     <FormShell title="AI / 模型配置" desc="模型供应商 API Key / 模型候选 / 默认模型" onSave={save} onLoad={load} msg={msg}>
-      {/* 供应商 */}
-      <div className="py-1.5 border-b border-border/60">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-muted">模型供应商</span>
-          <button onClick={() => setCfg(c => ({ ...c, providers: [...c.providers, { name: '', url: '', apiKey: '' }] }))}
-            className="text-[11px] text-accent hover:underline flex items-center gap-0.5">
-            <Plus className="w-3 h-3" /> 添加
-          </button>
-        </div>
-        {cfg.providers.map((p, i) => (
-          <div key={i} className="flex items-center gap-1.5 py-1">
-            <Txt value={p.name} placeholder="名称" onChange={v => setCfg(c => {
-              const a = [...c.providers]; a[i] = { ...a[i], name: v }; return { ...c, providers: a }
-            })} />
-            <Txt value={p.url} placeholder="Base URL" onChange={v => setCfg(c => {
-              const a = [...c.providers]; a[i] = { ...a[i], url: v }; return { ...c, providers: a }
-            })} />
-            <Txt value={p.apiKey} placeholder="API Key" onChange={v => setCfg(c => {
-              const a = [...c.providers]; a[i] = { ...a[i], apiKey: v }; return { ...c, providers: a }
-            })} />
-            <button onClick={() => setCfg(c => ({ ...c, providers: c.providers.filter((_, k) => k !== i) }))}
-              className="text-muted hover:text-vital shrink-0">
-              <Trash2 className="w-3.5 h-3.5" />
+      <div className="space-y-3 py-1">
+        {/* 供应商 */}
+        <GroupBlock title="模型供应商" color="#0891B2">
+          <div className="flex items-center justify-between py-1">
+            <span className="text-[10px] text-muted">API Key / Base URL</span>
+            <button onClick={() => setCfg(c => ({ ...c, providers: [...c.providers, { name: '', url: '', apiKey: '' }] }))}
+              className="text-[11px] text-accent hover:underline flex items-center gap-0.5">
+              <Plus className="w-3 h-3" /> 添加
             </button>
           </div>
-        ))}
+          {cfg.providers.map((p, i) => (
+            <div key={i} className="flex items-center gap-1.5 py-1">
+              <Txt value={p.name} placeholder="名称" onChange={v => setCfg(c => {
+                const a = [...c.providers]; a[i] = { ...a[i], name: v }; return { ...c, providers: a }
+              })} />
+              <Txt value={p.url} placeholder="Base URL" onChange={v => setCfg(c => {
+                const a = [...c.providers]; a[i] = { ...a[i], url: v }; return { ...c, providers: a }
+              })} />
+              <Txt value={p.apiKey} placeholder="API Key" onChange={v => setCfg(c => {
+                const a = [...c.providers]; a[i] = { ...a[i], apiKey: v }; return { ...c, providers: a }
+              })} />
+              <button onClick={() => setCfg(c => ({ ...c, providers: c.providers.filter((_, k) => k !== i) }))}
+                className="text-muted hover:text-vital shrink-0">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </GroupBlock>
+
+        {/* Chat 模型组 */}
+        <ModelGroupSection title="对话模型（chat）" desc="问答主力 / 深度思考 / 快模型（改写·意图）" color="#0891B2"
+          group={cfg.chat} showFast showThinking
+          onChange={g => setCfg(c => ({ ...c, chat: g }))} />
+
+        {/* Embedding 模型组 */}
+        <ModelGroupSection title="嵌入模型（embedding）" desc="文档 / 记忆向量化,维度需与库表一致（1024）" color="#059669"
+          group={cfg.embedding} showDimension
+          onChange={g => setCfg(c => ({ ...c, embedding: g }))} />
+
+        {/* Rerank 模型组 */}
+        <ModelGroupSection title="重排模型（rerank）" desc="检索结果精排;候选含 rerank-noop 时自动降级（仅 RRF 融合）" color="#7C3AED"
+          group={cfg.rerank}
+          onChange={g => setCfg(c => ({ ...c, rerank: g }))} />
       </div>
-
-      {/* Chat 模型组 */}
-      <ModelGroupSection title="对话模型（chat）" desc="问答主力 / 深度思考 / 快模型（改写·意图）"
-        group={cfg.chat} showFast showThinking
-        onChange={g => setCfg(c => ({ ...c, chat: g }))} />
-
-      {/* Embedding 模型组 */}
-      <ModelGroupSection title="嵌入模型（embedding）" desc="文档 / 记忆向量化,维度需与库表一致（1024）"
-        group={cfg.embedding} showDimension
-        onChange={g => setCfg(c => ({ ...c, embedding: g }))} />
-
-      {/* Rerank 模型组 */}
-      <ModelGroupSection title="重排模型（rerank）" desc="检索结果精排;候选含 rerank-noop 时自动降级（仅 RRF 融合）"
-        group={cfg.rerank}
-        onChange={g => setCfg(c => ({ ...c, rerank: g }))} />
     </FormShell>
   )
 }

@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+# ===== BayMD 后端镜像(多阶段构建) =====
+# 构建: maven 全量构建(依赖 framework/infra-ai 模块)
+# 运行: JRE 17
+
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /app
+
+# 先拷贝构建骨架,利用 Docker 层缓存(源码改动不重下依赖)
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
+COPY framework/pom.xml framework/pom.xml
+COPY infra-ai/pom.xml infra-ai/pom.xml
+COPY mcp-server/pom.xml mcp-server/pom.xml
+COPY bootstrap/pom.xml bootstrap/pom.xml
+RUN mvn -q -B dependency:go-offline -DskipTests || true
+
+# 拷贝全部源码并打包
+COPY framework framework
+COPY infra-ai infra-ai
+COPY mcp-server mcp-server
+COPY bootstrap bootstrap
+RUN mvn -q -B package -DskipTests
+
+# ===== 运行阶段 =====
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY --from=build /app/bootstrap/target/bootstrap-*.jar app.jar
+EXPOSE 9090
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]

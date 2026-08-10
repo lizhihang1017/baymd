@@ -44,7 +44,7 @@ public class AuthServiceImpl implements AuthService {
         if (StrUtil.isBlank(username) || StrUtil.isBlank(password)) {
             throw new ClientException("用户名或密码不能为空");
         }
-        UserDO user = findByUsername(username);
+        UserDO user = findByAccount(username);
         if (user == null || !passwordMatches(password, user.getPassword())) {
             throw new ClientException("用户名或密码错误");
         }
@@ -62,14 +62,16 @@ public class AuthServiceImpl implements AuthService {
         StpUtil.logout();
     }
 
-    private UserDO findByUsername(String username) {
-        if (StrUtil.isBlank(username)) {
+    private UserDO findByAccount(String account) {
+        if (StrUtil.isBlank(account)) {
             return null;
         }
         return userMapper.selectOne(
                 Wrappers.lambdaQuery(UserDO.class)
-                        .eq(UserDO::getUsername, username)
                         .eq(UserDO::getDeleted, 0)
+                        .and(w -> w.eq(UserDO::getUsername, account)
+                                .or().eq(UserDO::getEmail, account))
+                        .last("LIMIT 1")
         );
     }
 

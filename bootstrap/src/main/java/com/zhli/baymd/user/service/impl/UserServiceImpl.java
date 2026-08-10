@@ -84,6 +84,7 @@ public class UserServiceImpl implements UserService {
                 .username(username)
                 .password(password)
                 .role(role)
+                .email(StrUtil.trimToNull(requestParam.getEmail()))
                 .avatar(StrUtil.trimToNull(requestParam.getAvatar()))
                 .build();
         userMapper.insert(record);
@@ -110,6 +111,10 @@ public class UserServiceImpl implements UserService {
 
         if (requestParam.getRole() != null) {
             record.setRole(normalizeRole(requestParam.getRole()));
+        }
+
+        if (requestParam.getEmail() != null) {
+            record.setEmail(StrUtil.trimToNull(requestParam.getEmail()));
         }
 
         if (requestParam.getAvatar() != null) {
@@ -217,6 +222,8 @@ public class UserServiceImpl implements UserService {
                 .username(record.getUsername())
                 .role(record.getRole())
                 .avatar(record.getAvatar())
+                .email(record.getEmail())
+                .followupEnabled(record.getFollowupEnabled())
                 .createTime(record.getCreateTime())
                 .updateTime(record.getUpdateTime())
                 .build();

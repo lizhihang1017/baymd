@@ -118,9 +118,9 @@ export default function PromptView() {
 
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-0">
-      <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
-        <h1 className="text-sm font-semibold text-text-primary">LLM 提示词与超参数</h1>
-        <span className="ml-3 text-[11px] text-muted">按 LLM 调用场景配置 system / user 提示词与温度 / 最大 token / topP · DB 覆盖，重启生效</span>
+      <header className="h-16 border-b border-border flex items-center px-6 shrink-0 bg-white/70 backdrop-blur-md border-b border-border/70">
+        <div className="w-1 h-6 rounded-full bg-accent mr-3" />
+        <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">LLM 提示词</h1>
       </header>
 
       <div className="flex-1 min-h-0 flex overflow-hidden">

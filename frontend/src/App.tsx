@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
-import { MessageSquare, LayoutDashboard, Brain } from 'lucide-react'
+
 import Sidebar from './components/Sidebar'
 import ChatView from './components/ChatView'
 import AdminPage from './components/AdminPage'
-import { getCurrentUser } from './api/baymd'
+import { getCurrentUser, getAuthToken, clearAuthToken } from './api/baymd'
+import LoginPage from './components/LoginPage'
+import UserLoginGate from './components/UserLoginGate'
+
 
 /**
  * 路由：/ 为用户端（对话），/admin 为管理后台（独立页面）。
@@ -11,9 +14,17 @@ import { getCurrentUser } from './api/baymd'
  */
 function App() {
   const [isAdminRoute] = useState(() => window.location.pathname.startsWith('/admin'))
+
+  // 按路由切换标签图标: 用户端=大白, 管理员=心电线
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    if (link) link.href = isAdminRoute ? '/favicon.svg' : '/favicon-user.svg'
+  }, [isAdminRoute])
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null) // null = 加载中
+  const [authTick, setAuthTick] = useState(0) // 登录/退出触发重渲染
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [deepThinking, setDeepThinking] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0) // 新消息后刷新会话列表
 
   useEffect(() => {
     getCurrentUser().then(u => setIsAdmin(u?.role === 'admin')).catch(() => setIsAdmin(false))
@@ -27,46 +38,33 @@ function App() {
     setConversationId(null)
   }, [])
 
+  // 退出登录触发: 强制重新评估登录态
+  void authTick
+
+  // ===== 全局登录门: 未登录访问任何路径 → 登录页 =====
+  if (!getAuthToken()) {
+    if (isAdminRoute) {
+      return <LoginPage onSuccess={() => window.location.reload()} />
+    }
+    return <UserLoginGate onSuccess={() => window.location.reload()} />
+  }
+
   // ===== 管理后台（/admin）=====
   if (isAdminRoute) {
-    if (isAdmin === null) {
-      return <div className="h-screen bg-surface" />
-    }
-    if (!isAdmin) {
-      window.location.href = '/'
-      return null
-    }
     return <AdminPage />
   }
 
-  // ===== 用户端（/）=====
+  // ===== 用户端（/）ChatGPT 风格 =====
   return (
-    <div className="flex h-screen bg-surface">
-      <nav className="w-14 bg-panel border-r border-border flex flex-col items-center py-4 gap-2 shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center mb-4">
-          <Brain className="w-5 h-5 text-white" />
-        </div>
-        <button onClick={() => { window.location.href = '/' }}
-          className="w-9 h-9 rounded-lg flex items-center justify-center bg-accent-light text-accent"
-          title="对话">
-          <MessageSquare className="w-5 h-5" />
-        </button>
-        {/* 管理后台入口（/admin 页面内部会做 admin 角色守卫） */}
-        <button onClick={() => { window.location.href = '/admin' }}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-muted hover:text-text-primary hover:bg-panel transition-colors"
-          title="管理后台">
-          <LayoutDashboard className="w-5 h-5" />
-        </button>
-      </nav>
-
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar onSelect={selectConversation} onNew={newChat} activeId={conversationId} />
-        <ChatView
-          conversationId={conversationId}
-          deepThinking={deepThinking}
-          onToggleDeepThinking={() => setDeepThinking(d => !d)}
-        />
-      </div>
+    <div className="flex h-screen bg-u-bg">
+      <Sidebar onSelect={selectConversation} onNew={newChat} activeId={conversationId} refreshKey={refreshKey} onAuthChange={() => setAuthTick(t => t + 1)} />
+      <ChatView
+        conversationId={conversationId}
+        deepThinking={deepThinking}
+        onToggleDeepThinking={() => setDeepThinking(d => !d)}
+        onMessageSent={() => setRefreshKey(k => k + 1)}
+        onConversationCreated={setConversationId}
+      />
     </div>
   )
 }

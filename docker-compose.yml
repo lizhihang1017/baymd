@@ -1,0 +1,180 @@
+# ============================================================
+# BayMD — AI 私人医生 一键部署
+#
+# 默认: 使用 pgvector 向量检索(无需 Milvus,内存占用低)
+# 启用 Milvus 向量库: docker compose --profile milvus up -d
+#
+# 常用命令:
+#   构建并启动:  docker compose up -d --build
+#   查看日志:    docker compose logs -f baymd-backend
+#   停止:        docker compose down
+#   清库重置:    docker compose down -v
+# ============================================================
+name: baymd
+
+services:
+  # ---------- 依赖服务 ----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: baymd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: baymd
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro   # 首次启动自动建表+种子数据
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d baymd"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: baymd-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "123456", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "123456", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  rmqnamesrv:
+    image: apache/rocketmq:5.2.0
+    container_name: baymd-rmqnamesrv
+    restart: unless-stopped
+    command: sh mqnamesrv
+    environment:
+      JAVA_OPT_EXT: -Xms256m -Xmx256m -Xmn128m
+    volumes:
+      - rmqnamesrv-logs:/home/rocketmq/logs
+
+  rmqbroker:
+    image: apache/rocketmq:5.2.0
+    container_name: baymd-rmqbroker
+    restart: unless-stopped
+    command: sh mqbroker -n rmqnamesrv:9876 --enable-proxy
+    environment:
+      JAVA_OPT_EXT: -Xms512m -Xmx512m -Xmn256m
+    depends_on:
+      - rmqnamesrv
+    volumes:
+      - rmqbroker-logs:/home/rocketmq/logs
+      - rmqbroker-store:/home/rocketmq/store
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-alpha.72
+    container_name: baymd-rustfs
+    restart: unless-stopped
+    command:
+      - "--address"
+      - ":9000"
+      - "--console-enable"
+      - "--access-key"
+      - "admin"
+      - "--secret-key"
+      - "admin"
+      - "/data"
+    volumes:
+      - rustfsdata:/data
+
+  # ---------- 应用 ----------
+  baymd-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: baymd-mcp
+    restart: unless-stopped
+    ports:
+      - "9099:9099"
+
+  baymd-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: baymd-backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/baymd?client_encoding=UTF8
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_DATA_REDIS_PASSWORD: "123456"
+      ROCKETMQ_NAME_SERVER: rmqnamesrv:9876
+      RUSTFS_URL: http://rustfs:9000
+      S3_ENDPOINT: http://rustfs:9000
+      MCP_SERVER_URL: http://baymd-mcp:9099
+      # 百炼 API Key: 默认使用 application.yaml 内置 key,可在此覆盖
+      BAILIAN_API_KEY: ${BAILIAN_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rmqnamesrv:
+        condition: service_started
+    ports:
+      - "9090:9090"
+
+  baymd-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: baymd-frontend
+    restart: unless-stopped
+    depends_on:
+      - baymd-backend
+    ports:
+      - "${WEB_PORT:-80}:80"
+
+  # ---------- 可选: Milvus 向量库(内存需求高,默认不启动) ----------
+  # 启用方式: docker compose --profile milvus up -d
+  # 启用后需将 rag.vector.type 切换为 milvus
+  etcd:
+    profiles: ["milvus"]
+    image: quay.io/coreos/etcd:v3.5.18
+    container_name: baymd-etcd
+    restart: unless-stopped
+    command: >
+      etcd
+      -advertise-client-urls=http://etcd:2379
+      -listen-client-urls http://0.0.0.0:2379
+      --data-dir /etcd
+    volumes:
+      - etcddata:/etcd
+
+  milvus:
+    profiles: ["milvus"]
+    image: milvusdb/milvus:v2.6.6
+    container_name: baymd-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: rustfs:9000
+      MINIO_ACCESS_KEY_ID: admin
+      MINIO_SECRET_ACCESS_KEY: admin
+    volumes:
+      - milvusdata:/var/lib/milvus
+    ports:
+      - "19530:19530"
+    depends_on:
+      - etcd
+
+volumes:
+  pgdata:
+  redisdata:
+  rmqnamesrv-logs:
+  rmqbroker-logs:
+  rmqbroker-store:
+  rustfsdata:
+  etcddata:
+  milvusdata:

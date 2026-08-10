@@ -1,3 +1,4 @@
+import { authHeaders } from '../api/baymd'
 import { useState } from 'react'
 import { Loader2, Bug, ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -28,7 +29,7 @@ export default function DebugView() {
     try {
       const res = await fetch('/api/baymd/admin/rag/debug', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ question: question.trim() })
       })
       const json = await res.json()
@@ -51,9 +52,9 @@ export default function DebugView() {
 
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-0">
-      <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
-        <h1 className="text-sm font-semibold text-text-primary">RAG 调试</h1>
-        <span className="ml-3 text-[11px] text-muted">输入问题 → 查看改写 / 意图打分 / 执行器判定 / 检索证据</span>
+      <header className="h-16 border-b border-border flex items-center px-6 shrink-0 bg-white/70 backdrop-blur-md border-b border-border/70">
+        <div className="w-1 h-6 rounded-full bg-accent mr-3" />
+        <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">RAG 调试</h1>
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto p-5">
         <div className="max-w-2xl">
@@ -74,7 +75,7 @@ export default function DebugView() {
           {result && (
             <div className="space-y-4">
               {/* 1. 改写 */}
-              <div className="bg-panel border border-border rounded-xl p-4">
+              <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift">
                 <button onClick={() => toggle('rewrite')} className="flex items-center gap-1.5 w-full">
                   {expanded.rewrite ? <ChevronDown className="w-4 h-4 text-accent" /> : <ChevronRight className="w-4 h-4 text-accent" />}
                   <h2 className="text-sm font-semibold">① 查询改写</h2>
@@ -93,7 +94,7 @@ export default function DebugView() {
               </div>
 
               {/* 2. 意图 */}
-              <div className="bg-panel border border-border rounded-xl p-4">
+              <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift">
                 <button onClick={() => toggle('intent')} className="flex items-center gap-1.5 w-full">
                   {expanded.intent ? <ChevronDown className="w-4 h-4 text-accent" /> : <ChevronRight className="w-4 h-4 text-accent" />}
                   <h2 className="text-sm font-semibold">② 意图分类</h2>
@@ -124,7 +125,7 @@ export default function DebugView() {
               </div>
 
               {/* 3. 执行器 */}
-              <div className="bg-panel border border-border rounded-xl p-4">
+              <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift">
                 <div className="flex items-center gap-1.5">
                   <Bug className="w-4 h-4 text-accent" />
                   <h2 className="text-sm font-semibold">③ 执行器判定</h2>
@@ -133,7 +134,7 @@ export default function DebugView() {
               </div>
 
               {/* 4. 检索 */}
-              <div className="bg-panel border border-border rounded-xl p-4">
+              <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift">
                 <button onClick={() => toggle('retrieval')} className="flex items-center gap-1.5 w-full">
                   {expanded.retrieval ? <ChevronDown className="w-4 h-4 text-accent" /> : <ChevronRight className="w-4 h-4 text-accent" />}
                   <h2 className="text-sm font-semibold">④ 检索证据</h2>

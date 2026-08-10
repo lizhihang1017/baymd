@@ -37,6 +37,8 @@ public class UserVO {
     private String username;
     private String role;
     private String avatar;
+    private String email;
+    private Integer followupEnabled;
     private Date createTime;
     private Date updateTime;
 }

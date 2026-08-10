@@ -42,6 +42,16 @@ import java.util.List;
 public class WebConfig implements WebMvcConfigurer {
 
     /**
+     * 暴露本地文件目录（头像等）为静态资源: /api/baymd/files/** → ./data/baymd-files/**
+     */
+    @Override
+    public void addResourceHandlers(org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
+        String base = System.getProperty("user.dir") + "/data/baymd-files/";
+        registry.addResourceHandler("/files/**")
+                .addResourceLocations("file:" + base);
+    }
+
+    /**
      * 自定义消息转换器配置
      *
      * <p>

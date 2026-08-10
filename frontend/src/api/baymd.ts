@@ -1,5 +1,83 @@
 const BASE = '/api/baymd';
 
+// ===== 认证 =====
+
+const TOKEN_KEY = 'baymd_admin_token'
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY)
+}
+
+export function setAuthToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token)
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem(TOKEN_KEY)
+}
+
+/** 统一请求头: 若有登录 token 则带 Authorization */
+export function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = getAuthToken()
+  return {
+    ...(extra || {}),
+    ...(token ? { Authorization: token } : {}),
+  }
+}
+
+export async function login(username: string, password: string) {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  return res.json();
+}
+
+export async function register(username: string, password: string, email?: string) {
+  const res = await fetch(`${BASE}/user/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, email })
+  });
+  return res.json();
+}
+
+export async function uploadAvatar(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/user/avatar`, {
+    method: 'POST', headers: authHeaders(), body: form
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.message || '上传失败');
+  return json.data;
+}
+
+export async function getMyMemory() {
+  const res = await fetch(`${BASE}/user/memory`, { headers: authHeaders() });
+  const json = await res.json();
+  return json.data ?? { facts: [], episodes: [] };
+}
+
+export async function deleteMyFact(id: string) {
+  const res = await fetch(`${BASE}/user/memory/fact/${id}`, { method: 'DELETE', headers: authHeaders() });
+  return res.json();
+}
+
+export async function deleteMyEpisode(id: string) {
+  const res = await fetch(`${BASE}/user/memory/episode/${id}`, { method: 'DELETE', headers: authHeaders() });
+  return res.json();
+}
+
+export async function changePassword(oldPassword: string, newPassword: string) {
+  const res = await fetch(`${BASE}/user/password`, {
+    method: 'PUT', headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ oldPassword, newPassword })
+  });
+  return res.json();
+}
+
 export interface Conversation {
   conversationId: string;
   title: string;
@@ -44,32 +122,32 @@ export interface CurrentUser {
 // ===== 用户管理 (admin) =====
 
 export async function listUsers(page = 1, size = 100) {
-  const res = await fetch(`${BASE}/users?page=${page}&size=${size}`);
+  const res = await fetch(`${BASE}/users?page=${page}&size=${size}`, { headers: authHeaders() });
   const json = await res.json();
   return json.data?.records ?? [];
 }
 
-export async function createUser(data: { username: string; password: string; role: string; avatar?: string }) {
+export async function createUser(data: { username: string; password: string; role: string; email?: string; avatar?: string }) {
   const res = await fetch(`${BASE}/users`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    method: 'POST', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(data)
   });
   return res.json();
 }
 
-export async function updateUser(id: string, data: { username?: string; password?: string; role?: string; avatar?: string }) {
+export async function updateUser(id: string, data: { username?: string; password?: string; role?: string; email?: string; avatar?: string }) {
   const res = await fetch(`${BASE}/users/${id}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    method: 'PUT', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(data)
   });
   return res.json();
 }
 
 export async function deleteUser(id: string) {
-  const res = await fetch(`${BASE}/users/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/users/${id}`, { method: 'DELETE', headers: authHeaders() });
   return res.json();
 }
 
 export async function getCurrentUser(): Promise<CurrentUser> {
-  const res = await fetch(`${BASE}/user/me`);
+  const res = await fetch(`${BASE}/user/me`, { headers: authHeaders() });
   const json = await res.json();
   return json.data;
 }
@@ -77,28 +155,28 @@ export async function getCurrentUser(): Promise<CurrentUser> {
 // ===== Conversations =====
 
 export async function listConversations(): Promise<Conversation[]> {
-  const res = await fetch(`${BASE}/conversations`);
+  const res = await fetch(`${BASE}/conversations`, { headers: authHeaders() });
   const json = await res.json();
   return json.data || [];
 }
 
 export async function getMessages(conversationId: string): Promise<Message[]> {
-  const res = await fetch(`${BASE}/conversations/${conversationId}/messages`);
+  const res = await fetch(`${BASE}/conversations/${conversationId}/messages`, { headers: authHeaders() });
   const json = await res.json();
   return json.data || [];
 }
 
 export async function exportConversation(conversationId: string) {
-  const res = await fetch(`${BASE}/conversations/${conversationId}/export`);
+  const res = await fetch(`${BASE}/conversations/${conversationId}/export`, { headers: authHeaders() });
   return res.json();
 }
 
 export async function deleteConversation(conversationId: string) {
-  await fetch(`${BASE}/conversations/${conversationId}`, { method: 'DELETE' });
+  await fetch(`${BASE}/conversations/${conversationId}`, { headers: authHeaders(), method: 'DELETE' });
 }
 
 export async function clearMemory() {
-  const res = await fetch(`${BASE}/memory`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/memory`, { headers: authHeaders(), method: 'DELETE' });
   return res.json();
 }
 
@@ -184,7 +262,7 @@ export interface MedicalReport {
 export async function uploadReport(file: File): Promise<MedicalReport> {
   const form = new FormData();
   form.append('file', file);
-  const res = await fetch(`${BASE}/rag/report/upload`, { method: 'POST', body: form });
+  const res = await fetch(`${BASE}/rag/report/upload`, { headers: authHeaders(), method: 'POST', body: form });
   const json = await res.json();
   if (!json.success) throw new Error(json.message || '上传失败');
   return json.data;
@@ -285,7 +363,7 @@ export interface IntentTreeNode {
 }
 
 export async function getIntentTree(): Promise<IntentTreeNode[]> {
-  const res = await fetch(`${BASE}/intent-tree/trees`);
+  const res = await fetch(`${BASE}/intent-tree/trees`, { headers: authHeaders() });
   const json = await res.json();
   return json.data ?? [];
 }
@@ -305,21 +383,96 @@ export async function updateIntentNode(id: string, data: Record<string, any>) {
 }
 
 export async function deleteIntentNode(id: string) {
-  const res = await fetch(`${BASE}/intent-tree/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/intent-tree/${id}`, { headers: authHeaders(), method: 'DELETE' });
   return res.json();
+}
+
+// ===== 数据管理 (admin): 随访/反馈/报告 =====
+
+export async function getFollowupTasks(status?: string, limit = 100) {
+  const qs = new URLSearchParams({ limit: String(limit) })
+  if (status) qs.set('status', status)
+  const res = await fetch(`${BASE}/admin/followup/tasks?${qs}`, { headers: authHeaders() });
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function getFollowupStats() {
+  const res = await fetch(`${BASE}/admin/followup/stats`, { headers: authHeaders() });
+  const json = await res.json();
+  return json.data ?? {};
+}
+
+export async function triggerFollowup(id: string) {
+  const res = await fetch(`${BASE}/admin/followup/tasks/${id}/trigger`, { headers: authHeaders(), method: 'POST' });
+  return res.json();
+}
+
+export async function cancelFollowup(id: string) {
+  const res = await fetch(`${BASE}/admin/followup/tasks/${id}/cancel`, { headers: authHeaders(), method: 'POST' });
+  return res.json();
+}
+
+export async function deleteFollowup(id: string) {
+  const res = await fetch(`${BASE}/admin/followup/tasks/${id}`, { headers: authHeaders(), method: 'DELETE' });
+  return res.json();
+}
+
+export async function getFeedback(vote?: number, limit = 100) {
+  const qs = new URLSearchParams({ limit: String(limit) })
+  if (vote !== undefined) qs.set('vote', String(vote))
+  const res = await fetch(`${BASE}/admin/feedback?${qs}`, { headers: authHeaders() });
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function getFeedbackStats() {
+  const res = await fetch(`${BASE}/admin/feedback/stats`, { headers: authHeaders() });
+  const json = await res.json();
+  return json.data ?? {};
+}
+
+export async function deleteFeedback(id: string) {
+  const res = await fetch(`${BASE}/admin/feedback/${id}`, { headers: authHeaders(), method: 'DELETE' });
+  return res.json();
+}
+
+export async function getReports(limit = 100) {
+  const res = await fetch(`${BASE}/admin/reports?limit=${limit}`, { headers: authHeaders() });
+  const json = await res.json();
+  return json.data ?? [];
+}
+
+export async function getReportDetail(id: string) {
+  const res = await fetch(`${BASE}/admin/reports/${id}`, { headers: authHeaders() });
+  const json = await res.json();
+  return json.data;
+}
+
+export async function deleteReport(id: string) {
+  const res = await fetch(`${BASE}/admin/reports/${id}`, { headers: authHeaders(), method: 'DELETE' });
+  return res.json();
+}
+
+// ===== 系统健康检查 (admin) =====
+
+export async function getHealth() {
+  const res = await fetch(`${BASE}/admin/health`, { headers: authHeaders() });
+  const json = await res.json();
+  return json.data ?? null;
 }
 
 // ===== Trace =====
 
 export async function getTraces(page: number = 1, size: number = 10) {
-  const res = await fetch(`${BASE}/rag/traces/runs?page=${page}&size=${size}`);
+  const res = await fetch(`${BASE}/rag/traces/runs?page=${page}&size=${size}`, { headers: authHeaders() });
   return res.json();
 }
 
 // ===== Runtime Config (admin) =====
 
 export async function getConfig(section: string): Promise<string | null> {
-  const res = await fetch(`${BASE}/admin/config/${section}`);
+  const res = await fetch(`${BASE}/admin/config/${section}`, { headers: authHeaders() });
   const json = await res.json();
   return json.data ?? null;
 }
@@ -347,19 +500,19 @@ export interface ToolItem {
 // ===== 用户记忆 CRUD (admin) =====
 
 export async function getMemoryUsers() {
-  const res = await fetch(`${BASE}/admin/memory/users`);
+  const res = await fetch(`${BASE}/admin/memory/users`, { headers: authHeaders() });
   const json = await res.json();
   return json.data ?? [];
 }
 
 export async function getMemoryFacts(userId: string) {
-  const res = await fetch(`${BASE}/admin/memory/facts?userId=${encodeURIComponent(userId)}`);
+  const res = await fetch(`${BASE}/admin/memory/facts?userId=${encodeURIComponent(userId)}`, { headers: authHeaders() });
   const json = await res.json();
   return json.data ?? [];
 }
 
 export async function getMemoryEpisodes(userId: string) {
-  const res = await fetch(`${BASE}/admin/memory/episodes?userId=${encodeURIComponent(userId)}`);
+  const res = await fetch(`${BASE}/admin/memory/episodes?userId=${encodeURIComponent(userId)}`, { headers: authHeaders() });
   const json = await res.json();
   return json.data ?? [];
 }
@@ -379,7 +532,7 @@ export async function updateMemoryFact(id: string, data: { factType?: string; fa
 }
 
 export async function deleteMemoryFact(id: string) {
-  const res = await fetch(`${BASE}/admin/memory/fact/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/admin/memory/fact/${id}`, { headers: authHeaders(), method: 'DELETE' });
   return res.json();
 }
 
@@ -398,12 +551,12 @@ export async function updateMemoryEpisode(id: string, data: { title?: string; su
 }
 
 export async function deleteMemoryEpisode(id: string) {
-  const res = await fetch(`${BASE}/admin/memory/episode/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE}/admin/memory/episode/${id}`, { headers: authHeaders(), method: 'DELETE' });
   return res.json();
 }
 
 export async function getTools(): Promise<ToolItem[]> {
-  const res = await fetch(`${BASE}/admin/tools`);
+  const res = await fetch(`${BASE}/admin/tools`, { headers: authHeaders() });
   const json = await res.json();
   return json.data ?? [];
 }
@@ -429,7 +582,7 @@ export interface McpServerStatus {
 }
 
 export async function getMcpServers(): Promise<McpServerStatus[]> {
-  const res = await fetch(`${BASE}/admin/mcp/servers`);
+  const res = await fetch(`${BASE}/admin/mcp/servers`, { headers: authHeaders() });
   const json = await res.json();
   return json.data ?? [];
 }
@@ -461,7 +614,7 @@ export async function deleteMcpServer(name: string) {
 
 /** 场景化提示词目录 — 每个 LLM 调用场景的元信息 + 默认提示词文本 + 默认超参 + 当前覆盖 */
 export async function getPromptScenes() {
-  const res = await fetch(`${BASE}/admin/config/prompt-scenes`);
+  const res = await fetch(`${BASE}/admin/config/prompt-scenes`, { headers: authHeaders() });
   const json = await res.json();
   return json.data ?? [];
 }
@@ -522,7 +675,7 @@ export interface LlmCallDetail {
 }
 
 export async function getTraceDetail(traceId: string): Promise<TraceDetail> {
-  const res = await fetch(`${BASE}/rag/traces/runs/${traceId}`);
+  const res = await fetch(`${BASE}/rag/traces/runs/${traceId}`, { headers: authHeaders() });
   const json = await res.json();
   return json.data;
 }
@@ -530,7 +683,7 @@ export async function getTraceDetail(traceId: string): Promise<TraceDetail> {
 // ===== FollowUp (主动随访) =====
 
 export async function bindEmail(email: string) {
-  const res = await fetch(`${BASE}/user/email/bind?email=${encodeURIComponent(email)}`, { method: 'POST' });
+  const res = await fetch(`${BASE}/user/email/bind?email=${encodeURIComponent(email)}`, { headers: authHeaders(), method: 'POST' });
   return res.json();
 }
 

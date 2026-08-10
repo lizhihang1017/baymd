@@ -73,6 +73,22 @@ public class AdminOpsController {
         return Results.success(jdbcTemplate.queryForList(sql));
     }
 
+    /** 工作流节点统计：按 trace 节点聚合各阶段调用次数 / 平均耗时 / 失败数 */
+    @GetMapping("/admin/ops/workflow-stats")
+    public Result<java.util.List<Map<String, Object>>> workflowStats() {
+        String sql = """
+                SELECT node_name AS nodename, node_type AS nodetype,
+                       COUNT(*) AS calls,
+                       COALESCE(AVG(duration_ms), 0)::bigint AS avgdurationms,
+                       COALESCE(SUM(CASE WHEN status <> 'SUCCESS' THEN 1 ELSE 0 END), 0) AS failed
+                FROM t_rag_trace_node
+                WHERE start_time > NOW() - INTERVAL '72 hours'
+                GROUP BY node_name, node_type
+                ORDER BY avgdurationms DESC
+                """;
+        return Results.success(jdbcTemplate.queryForList(sql));
+    }
+
     /** LLM 调用统计：次数 / 平均耗时 / 失败数 / 错误率趋势（来自 trace 数据） */
     @GetMapping("/admin/ops/llm-stats")
     public Result<Map<String, Object>> llmStats(

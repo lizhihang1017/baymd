@@ -76,11 +76,11 @@ public class UserContextInterceptor implements HandlerInterceptor {
             // 未登录时获取 loginId 会抛异常
         }
         if (StrUtil.isBlank(loginId)) {
-            // 未登录，设置默认系统用户
+            // 未登录，设置默认用户（user 角色）— 用户端可免登录使用,管理后台需真实登录
             UserContext.set(LoginUser.builder()
                     .userId("1")
                     .username("system")
-                    .role("admin")
+                    .role("user")
                     .avatar(DEFAULT_AVATAR_URL)
                     .build());
             return true;
@@ -90,7 +90,7 @@ public class UserContextInterceptor implements HandlerInterceptor {
             UserContext.set(LoginUser.builder()
                     .userId("1")
                     .username("system")
-                    .role("admin")
+                    .role("user")
                     .avatar(DEFAULT_AVATAR_URL)
                     .build());
             return true;

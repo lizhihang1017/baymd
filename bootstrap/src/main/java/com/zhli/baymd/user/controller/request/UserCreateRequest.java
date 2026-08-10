@@ -41,6 +41,11 @@ public class UserCreateRequest {
     private String role;
 
     /**
+     * 邮箱（用于健康随访，非必填）
+     */
+    private String email;
+
+    /**
      * 头像地址
      */
     private String avatar;

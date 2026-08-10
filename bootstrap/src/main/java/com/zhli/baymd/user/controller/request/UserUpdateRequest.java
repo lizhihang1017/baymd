@@ -41,6 +41,11 @@ public class UserUpdateRequest {
     private String role;
 
     /**
+     * 邮箱（用于健康随访，可选）
+     */
+    private String email;
+
+    /**
      * 头像地址
      */
     private String avatar;

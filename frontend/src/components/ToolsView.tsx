@@ -102,9 +102,9 @@ export default function ToolsView() {
 
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-0">
-      <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
-        <h1 className="text-sm font-semibold text-text-primary">工具管理</h1>
-        <span className="ml-3 text-[11px] text-muted">本地 Agent 工具 + MCP 远程工具的启用/停用 · 开关即时生效，无需重启</span>
+      <header className="h-16 border-b border-border flex items-center px-6 shrink-0 bg-white/70 backdrop-blur-md border-b border-border/70">
+        <div className="w-1 h-6 rounded-full bg-accent mr-3" />
+        <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">工具管理</h1>
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-5">
@@ -139,7 +139,7 @@ export default function ToolsView() {
 
                 {/* 添加表单 */}
                 {showAdd && (
-                  <div className="bg-panel border border-border rounded-xl p-3 mb-3">
+                  <div className="bg-white border border-border/70 rounded-xl shadow-sm p-3 mb-3">
                     <div className="flex gap-2 items-end flex-wrap">
                       <label className="flex-1 min-w-[140px]">
                         <span className="text-[11px] text-muted">Server 名称</span>
@@ -173,7 +173,7 @@ export default function ToolsView() {
                 {servers.length === 0 ? (
                   <p className="text-[11px] text-muted bg-panel border border-border rounded-lg p-3">暂无 MCP Server 配置</p>
                 ) : (
-                  <div className="bg-panel border border-border rounded-xl divide-y divide-border">
+                  <div className="bg-white border border-border/70 rounded-xl shadow-sm divide-y divide-border/60 card-lift">
                     {servers.map(s => (
                       <div key={s.name} className="flex items-center gap-3 px-4 py-3">
                         <div className="flex-1 min-w-0">
@@ -235,7 +235,7 @@ function ToolGroup({ title, subtitle, tools, toggle }: {
     <section>
       <h2 className="text-xs font-semibold mb-0.5">{title} <span className="text-muted font-normal">({tools.length})</span></h2>
       <p className="text-[11px] text-muted mb-2">{subtitle}</p>
-      <div className="bg-panel border border-border rounded-xl divide-y divide-border">
+      <div className="bg-white border border-border/70 rounded-xl shadow-sm divide-y divide-border/60 card-lift">
         {tools.map(t => (
           <div key={t.name} className="flex items-center gap-3 px-4 py-3">
             <div className="flex-1 min-w-0">

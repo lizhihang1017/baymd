@@ -41,9 +41,9 @@ export default function TraceView() {
 
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-0">
-      <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
-        <h1 className="text-sm font-semibold text-text-primary">链路追踪</h1>
-        <span className="ml-3 text-[11px] text-muted">每次问答的完整调用链路 · 节点耗时 / 状态 / 错误</span>
+      <header className="h-16 border-b border-border flex items-center px-6 shrink-0 bg-white/70 backdrop-blur-md border-b border-border/70">
+        <div className="w-1 h-6 rounded-full bg-accent mr-3" />
+        <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">链路追踪</h1>
       </header>
 
       <div className="flex-1 min-h-0 flex overflow-hidden">
@@ -137,7 +137,7 @@ function TraceDetailPanel({ detail, onBack }: { detail: TraceDetail; onBack: () 
 
       {/* 用户问题 + 最终回答 */}
       {runExtra && (runExtra.question || runExtra.answer) && (
-        <div className="bg-panel border border-border rounded-xl p-4 mb-4">
+        <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift mb-4">
           <h3 className="text-xs font-semibold text-muted mb-2">用户问题 / 最终回答</h3>
           <div className="space-y-2">
             {runExtra.question && (
@@ -157,7 +157,7 @@ function TraceDetailPanel({ detail, onBack }: { detail: TraceDetail; onBack: () 
       )}
 
       {/* 瀑布图 */}
-      <div className="bg-panel border border-border rounded-xl p-4 mb-4 overflow-x-auto">
+      <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift mb-4 overflow-x-auto">
         <h3 className="text-xs font-semibold text-muted mb-3">调用瀑布图</h3>
         <div className="space-y-0.5 min-w-[480px]">
           {nodes.map((n, i) => (
@@ -167,7 +167,7 @@ function TraceDetailPanel({ detail, onBack }: { detail: TraceDetail; onBack: () 
       </div>
 
       {/* 节点明细 */}
-      <div className="bg-panel border border-border rounded-xl p-4">
+      <div className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift">
         <h3 className="text-xs font-semibold text-muted mb-3">节点明细（{nodes.length}）</h3>
         <div className="space-y-1">
           {nodes.map((n, i) => {

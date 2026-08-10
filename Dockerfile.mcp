@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+# ===== BayMD MCP Server 镜像(多阶段构建) =====
+# 独立模块,仅依赖 Spring Boot + MCP SDK,可单独构建
+
+FROM maven:3.9-eclipse-temurin-17 AS build
+WORKDIR /app
+
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
+COPY mcp-server/pom.xml mcp-server/pom.xml
+RUN mvn -q -B dependency:go-offline -DskipTests || true
+
+COPY mcp-server mcp-server
+RUN mvn -q -B package -pl mcp-server -DskipTests
+
+# ===== 运行阶段 =====
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY --from=build /app/mcp-server/target/mcp-server-*.jar app.jar
+EXPOSE 9099
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]

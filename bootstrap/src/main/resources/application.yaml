@@ -16,9 +16,9 @@ spring:
   datasource:
     driver-class-name: org.postgresql.Driver
     type: com.zaxxer.hikari.HikariDataSource
-    username: postgres
-    password: postgres
-    url: jdbc:postgresql://127.0.0.1:5432/baymd?client_encoding=UTF8
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:5432/baymd?client_encoding=UTF8}
     hikari:
       connection-timeout: 5000
       idle-timeout: 600000
@@ -29,18 +29,18 @@ spring:
 
   data:
     redis:
-      host: 127.0.0.1
-      port: 6379
-      password: 123456
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:123456}
 
 rocketmq:
-  name-server: 127.0.0.1:9876
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
   producer:
     group: baymd-producer${unique-name:}_pg
     send-message-timeout: 2000
 
 milvus:
-  uri: http://localhost:19530
+  uri: ${MILVUS_URI:http://localhost:19530}
 
 # 邮件（主动随访用，默认注释，配置后开启 rag.followup.enabled=true）
 spring.mail:
@@ -100,7 +100,7 @@ rag:
   mcp:
     servers:
       - name: default
-        url: http://localhost:9099
+        url: ${MCP_SERVER_URL:http://localhost:9099}
 
   report:
     enabled: true            # 报告解读功能默认关闭，配置 VLM 后开启
@@ -223,15 +223,15 @@ ai:
          priority: 1
 
 rustfs:
-  url: http://localhost:9000
-  access-key-id: admin
-  secret-access-key: admin
+  url: ${RUSTFS_URL:http://localhost:9000}
+  access-key-id: ${S3_ACCESS_KEY:admin}
+  secret-access-key: ${S3_SECRET_KEY:admin}
 
 storage:
   s3:
-    endpoint: http://localhost:9000
-    access-key-id: admin
-    secret-access-key: admin
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    access-key-id: ${S3_ACCESS_KEY:admin}
+    secret-access-key: ${S3_SECRET_KEY:admin}
 
 sa-token:
   token-name: Authorization

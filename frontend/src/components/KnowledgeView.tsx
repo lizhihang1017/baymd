@@ -105,8 +105,9 @@ export default function KnowledgeView() {
 
   return (
     <div className="flex-1 flex flex-col bg-surface min-h-0">
-      <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
-        <h1 className="text-sm font-semibold text-text-primary">知识库管理</h1>
+      <header className="h-16 border-b border-border flex items-center px-6 shrink-0 bg-white/70 backdrop-blur-md border-b border-border/70">
+        <div className="w-1 h-6 rounded-full bg-accent mr-3" />
+        <h1 className="font-display text-lg font-semibold text-text-primary tracking-tight">知识库管理</h1>
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-6">
@@ -278,7 +279,7 @@ export default function KnowledgeView() {
             ) : docs.length === 0 ? (
               <p className="text-xs text-muted">该知识库暂无文档</p>
             ) : (
-              <div className="bg-panel border border-border rounded-xl divide-y divide-border">
+              <div className="bg-white border border-border/70 rounded-xl shadow-sm divide-y divide-border/60 card-lift">
                 {docs.map(d => (
                   <div key={d.id} className="flex items-center justify-between px-4 py-2.5">
                     <div className="flex items-center gap-2 min-w-0">
@@ -314,16 +315,32 @@ export default function KnowledgeView() {
                   </button>
                 </div>
                 <div className="px-3 py-2 space-y-2 max-h-96 overflow-y-auto">
-                  <p className="text-[11px] text-muted">共 {chunkTotal} 块</p>
+                  <p className="text-[11px] text-muted">共 {chunkTotal} 块 · 分块策略切分结果</p>
                   {chunkList.length === 0 ? (
                     <p className="text-[11px] text-muted">加载中...</p>
                   ) : (
-                    chunkList.map((c, i) => (
-                      <div key={i} className="bg-panel rounded-md px-2 py-1.5">
-                        <span className="text-[10px] text-accent font-medium">#{c.chunkIndex ?? c.index ?? i}</span>
-                        <p className="text-[11px] text-text-primary whitespace-pre-wrap mt-0.5">{c.content}</p>
-                      </div>
-                    ))
+                    chunkList.map((c, i) => {
+                      const len = c.content?.length || 0
+                      return (
+                        <details key={i} open={len < 400}
+                          className="group bg-panel border border-border/60 rounded-lg overflow-hidden">
+                          <summary className="flex items-center justify-between px-2.5 py-1.5 cursor-pointer select-none
+                            hover:bg-accent/5 transition-colors list-none [&::-webkit-details-marker]:hidden">
+                            <span className="flex items-center gap-2">
+                              <span className="text-[10px] font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+                                块 #{c.chunkIndex ?? c.index ?? i}
+                              </span>
+                              <span className="text-[10px] text-muted font-mono">{len} 字符</span>
+                            </span>
+                            <span className="text-[10px] text-muted group-open:hidden">展开</span>
+                            <span className="text-[10px] text-muted hidden group-open:inline">收起</span>
+                          </summary>
+                          <div className="border-t border-border/50">
+                            <p className="text-[11px] text-text-primary whitespace-pre-wrap px-2.5 py-2 max-h-56 overflow-y-auto">{c.content}</p>
+                          </div>
+                        </details>
+                      )
+                    })
                   )}
                 </div>
               </div>
@@ -342,7 +359,7 @@ export default function KnowledgeView() {
             ) : (
               <div className="grid gap-4">
                 {kbs.map(kb => (
-                  <div key={kb.id} className="bg-panel border border-border rounded-xl p-4">
+                  <div key={kb.id} className="bg-white border border-border/70 rounded-xl shadow-sm p-4 card-lift">
                     <div className="flex items-center gap-3 mb-3">
                       <Database className="w-5 h-5 text-accent" />
                       <div className="min-w-0">
